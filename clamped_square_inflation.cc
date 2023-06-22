@@ -28,6 +28,7 @@
 //LIC//
 //LIC//====================================================================
 #include <fenv.h>
+
 //Generic routines
 #include "generic.h"
 
@@ -41,31 +42,39 @@ using namespace std;
 using namespace oomph;
 
 
+
+//===========================================================================
+/// Namespace for problem parameters
+//===========================================================================
 namespace Parameters
 {
- // Plate length
+ 
+ /// Plate length
  double L = 1.0;
-  // The plate thickness
+ 
+ /// The plate thickness
  double Thickness = 0.01;
- // Poisson ratio
+ 
+ /// Poisson ratio
  double Nu = 0.5;
- // Membrane coupling coefficient
+
+ /// FvK parameter (slightly dangerous; should really
+ /// be computed as a dependent parameter to accommodate
+ /// changes in Nu and Thickness.
  double Eta = 12.0*(1.0-Nu*Nu)*Thickness*Thickness;
  
- // Control parameters
+ /// Magnitude of pressure
  double P_mag = 0.0;
+
+ /// Magnitude of shear stress
  double T_mag = 0.0;
  
- // Mesh parameters
+ /// Element size
  double Element_area=0.1;
  
- // Output directory
- string Output_dir="RESLT";
- 
- // Assigns the value of pressure depending on the position (x,y)
+ /// Pressure depending on the position (x,y)
  void get_pressure(const Vector<double>& x, double& pressure)
  {
-  // Parabolic forcing growing outwards
   pressure = P_mag * (x[0]*x[0]+x[1]*x[1]);
  }
  
@@ -75,25 +84,26 @@ namespace Parameters
   pressure.resize(1);
   get_pressure(x,pressure[0]);
  }
- 
- // Assigns the value of in-plane forcing depending on the position (x,y)
- void get_in_plane_force(const Vector<double>& x, Vector<double>& grad)
+
+ /// Shear stress depending on the position (x,y)
+ void get_in_plane_force(const Vector<double>& x, Vector<double>& tau)
  {
-  // Parabolic forcing decaying outwards
-  grad[0]= T_mag * (1.0-x[0]*x[0])*(1.0-x[1]*x[1]);
-  grad[1]= T_mag * (1.0-x[0]*x[0])*(1.0-x[1]*x[1]);
+  tau[0]= T_mag * (1.0-x[0]*x[0])*(1.0-x[1]*x[1]);
+  tau[1]= T_mag * (1.0-x[0]*x[0])*(1.0-x[1]*x[1]);
  }
 
- //--------------------------------------------------------------------- 
- // Functions to assign boundary conditions
- 
- // Null function for any zero (homogenous) BCs
+  
+ /// Helper function to specify boundary conditions (here all homogeneous)
+ /// as a function of both coordinates (convenient in this problem;
+ /// other interfaces that specify boundary conditions in terms of
+ /// boundary coordinate exist.
  void get_null_fct(const Vector<double>& x, double& value)
  {
   value = 0.0;
  }
-
+ 
 } // end of Parameters
+
 
 ///////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////
@@ -119,8 +129,7 @@ public:
   Trace_file.close();
   
   // Clean up memory
-  delete (Surface_mesh_pt);
-  delete (Bulk_mesh_pt);
+  delete Bulk_mesh_pt;
   delete Boundary_pt;
   delete Boundary0_pt;
   delete Boundary1_pt;
@@ -128,24 +137,18 @@ public:
   delete Boundary3_pt;
  };
 
- /// Setup and build the mesh
- void build_mesh();
-
- /// Helper function to (re-)set boundary condition
- /// and complete the build of all elements
- void complete_problem_setup();
-
- /// Helper function to apply boundary conditions
- void apply_boundary_conditions();
 
  /// Print information about the parameters we are trying to solve for.
  void actions_before_newton_solve()
  {
   // For what control parameter are we about to solve?
-  oomph_info << "-------------------------------------------------------" << std::endl;
-  oomph_info << "Solving for p = " << Parameters::P_mag << std::endl;
-  oomph_info << "     Doc_info = " << Doc_info.number() << std::endl;
-  oomph_info << "-------------------------------------------------------" << std::endl;
+  oomph_info << "-------------------------------------------------------"
+             << std::endl;
+  oomph_info << "Solving for P = " << Parameters::P_mag << std::endl;
+  oomph_info << "Solving for T = " << Parameters::T_mag << std::endl;
+  oomph_info << "         step = " << Doc_info.number() << std::endl;
+  oomph_info << "-------------------------------------------------------"
+             << std::endl;
  }
 
  /// Update after solve (empty)
@@ -161,71 +164,93 @@ public:
  {
   return dynamic_cast<TriangleMesh<ELEMENT>*> (Problem::mesh_pt());
  }
+ 
+private:
+
+ /// Setup and build the mesh
+ void build_mesh();
+
+ /// Helper function to (re-)set boundary condition
+ /// and complete the build of all elements
+ void complete_problem_setup();
+
+ /// Helper function to apply boundary conditions
+ void apply_boundary_conditions();
+
+
+ /// Triangle mesh parameters
+ TriangleMeshParameters* Triangle_mesh_parameters_pt;
+
+ /// Closed outer boundary
+ TriangleMeshClosedCurve* Boundary_pt;
+
+ /// Polyline defining boundary 0 
+ TriangleMeshPolyLine* Boundary0_pt;
+
+ /// Polyline defining boundary 1
+ TriangleMeshPolyLine* Boundary1_pt;
+
+ /// Polyline defining boundary 2 
+ TriangleMeshPolyLine* Boundary2_pt;
+
+ /// Polyline defining boundary 3 
+ TriangleMeshPolyLine* Boundary3_pt;
 
  /// Doc info object for labeling output
  DocInfo Doc_info;
  
-private:
-
- // Triangle Mesh Parameter Data
- // This is the data used to set-up the mesh, we need to store the pointers
- // HERE otherwise we will not be able to clean up the memory once we have
- // finished the problem.
- // The initial (and maximum) element area
- double Element_area;
- // The mesh parameters
- TriangleMeshParameters* Triangle_mesh_parameters_pt;
- TriangleMeshClosedCurve* Boundary_pt;
- TriangleMeshPolyLine* Boundary0_pt;
- TriangleMeshPolyLine* Boundary1_pt;
- TriangleMeshPolyLine* Boundary2_pt;
- TriangleMeshPolyLine* Boundary3_pt;
-
  /// Trace file to document norm of solution
  ofstream Trace_file;
 
- /// Delete traction elements and wipe the surface mesh
- void delete_traction_elements(Mesh* const &surface_mesh_pt);
-
  /// Pointer to "bulk" mesh
  TriangleMesh<ELEMENT>* Bulk_mesh_pt;
+ 
+ /// Pointer to element that contains the central point
+ GeomObject* Central_element_geom_obj_pt;
 
- /// Pointer to "surface" mesh
- Mesh* Surface_mesh_pt;
+ /// Local coordinate in element pointed to by Central_element_pt
+ /// that contains central point
+ Vector<double> Central_point_local_coord;
+ 
+ }; // end_of_problem_class
 
-}; // end_of_problem_class
 
 //==start_of_problem_constructor===========================================
-/// Constructs problem, by calling the build_mesh() and then the
-/// complete_problem_setup() helpers. Finally assign_eqn_numbers() sets up
-/// the local-global dof/equation numbering scheme.
+/// Constructor
 //=========================================================================
 template<class ELEMENT>
 UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
- :
- Element_area(Parameters::Element_area)
 {
+ 
+ // Set output directory
+ Doc_info.set_directory("RESLT");
+
+ // Step number
+ Doc_info.number()=0;
+ 
  // Build the mesh
  build_mesh();
 
- // Store number of bulk elements
+ // Complete problem setup
  complete_problem_setup();
 
+ // Open trace file
  char filename[100];
  ofstream Param_file;
- strcpy(filename, (Parameters::Output_dir + "/parameters.dat").c_str());
+ strcpy(filename, (Doc_info.directory()+"/parameters.dat").c_str());
  Param_file.open(filename);
 
- // Output plate parameters
+ // Output parameters
  Param_file << "L            " << Parameters::L         << std::endl
 	    << "thickness    " << Parameters::Thickness << std::endl
 	    << "nu           " << Parameters::Nu        << std::endl
 	    << "eta          " << Parameters::Eta       << std::endl
 	    << "Element area " << Parameters::Element_area << std::endl;
- 
- strcpy(filename, (Parameters::Output_dir + "/trace.dat").c_str());
+ strcpy(filename, (Doc_info.directory()+"/trace.dat").c_str());
  Trace_file.open(filename);
- 
+
+
+ // Assign equation numbers
  oomph_info << "Number of equations: "
 	    << assign_eqn_numbers() << '\n';
  
@@ -253,85 +278,88 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
         V0       E0       V1
         <--------L-------->
    ================================*/
- 
- double L = Parameters::L;
 
- // Declare the vertices..
+ 
+ double length = Parameters::L;
+
+ 
+ // Declare the vertices...
  Vector<double>
-  V0(2,0.0),
-  V1(2,0.0),
-  V2(2,0.0),
-  V3(2,0.0);
- // ..and place them at the corners of the rectangle
- V0[0] = -0.5*L;
- V0[1] = -0.5;
- V1[0] =  0.5*L;
- V1[1] = -0.5;
- V2[0] =  0.5*L;
- V2[1] =  0.5;
- V3[0] = -0.5*L;
- V3[1] =  0.5;
+  vertex0(2,0.0),
+  vertex1(2,0.0),
+  vertex2(2,0.0),
+  vertex3(2,0.0);
+ 
+ // ...and place them at the corners of the rectangle
+ vertex0[0] = -0.5*length;
+ vertex0[1] = -0.5;
+ vertex1[0] =  0.5*length;
+ vertex1[1] = -0.5;
+ vertex2[0] =  0.5*length;
+ vertex2[1] =  0.5;
+ vertex3[0] = -0.5*length;
+ vertex3[1] =  0.5;
   
- // Declare the edges..
+ // Declare the edges...
  Vector<Vector<double>>
-  E0(2,Vector<double>(2,0.0)),
-  E1(2,Vector<double>(2,0.0)),
-  E2(2,Vector<double>(2,0.0)),
-  E3(2,Vector<double>(2,0.0));
- // ..and assign them endpoints
- E0[0] = V0;
- E0[1] = V1;
- E1[0] = V1;
- E1[1] = V2;
- E2[0] = V2;
- E2[1] = V3;
- E3[0] = V3;
- E3[1] = V0;
+  edge0(2,Vector<double>(2,0.0)),
+  edge1(2,Vector<double>(2,0.0)),
+  edge2(2,Vector<double>(2,0.0)),
+  edge3(2,Vector<double>(2,0.0));
+ 
+ // ...and assign their endpoints
+ edge0[0] = vertex0;
+ edge0[1] = vertex1;
+ edge1[0] = vertex1;
+ edge1[1] = vertex2;
+ edge2[0] = vertex2;
+ edge2[1] = vertex3;
+ edge3[0] = vertex3;
+ edge3[1] = vertex0;
   
  // Define boundaries from edges
- Boundary0_pt = new TriangleMeshPolyLine(E0, 0);
- Boundary1_pt = new TriangleMeshPolyLine(E1, 1);
- Boundary2_pt = new TriangleMeshPolyLine(E2, 2);
- Boundary3_pt = new TriangleMeshPolyLine(E3, 3);
+ Boundary0_pt = new TriangleMeshPolyLine(edge0, 0);
+ Boundary1_pt = new TriangleMeshPolyLine(edge1, 1);
+ Boundary2_pt = new TriangleMeshPolyLine(edge2, 2);
+ Boundary3_pt = new TriangleMeshPolyLine(edge3, 3);
  
  Vector<TriangleMeshCurveSection*> boundary_polyline_pt(4);
  boundary_polyline_pt[0] = Boundary0_pt;
  boundary_polyline_pt[1] = Boundary1_pt;
  boundary_polyline_pt[2] = Boundary2_pt;
  boundary_polyline_pt[3] = Boundary3_pt;
- 
+
+ // Create closed outer boundary
  Boundary_pt = new TriangleMeshClosedCurve(boundary_polyline_pt);
  
  TriangleMeshParameters Triangle_mesh_parameters(Boundary_pt);
  
  // Set the maximum element area
- Triangle_mesh_parameters.element_area()=Element_area;
- 
+ Triangle_mesh_parameters.element_area()=Parameters::Element_area ;
+
  // Build an assign bulk mesh
  Bulk_mesh_pt=new TriangleMesh<ELEMENT>(Triangle_mesh_parameters);
  
- // Create "surface mesh" that will contain only the prescribed-traction
- // elements. The constructor creates the mesh without adding any nodes
- // elements etc.
- Surface_mesh_pt =  new Mesh;
- 
- //Add two submeshes to problem
+  //Add submesh to problem
  add_sub_mesh(Bulk_mesh_pt);
- add_sub_mesh(Surface_mesh_pt);
+
+ // hierher superfluous; assign directly to mesh_pt();
  
  // Combine submeshes into a single Mesh
  build_global_mesh();
+
 }// end build_mesh
 
 
 
 //==start_of_complete======================================================
-/// Set boundary condition exactly, and complete the build of
+/// Set boundary conditions and complete the build of
 /// all elements
 //=========================================================================
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
 {  
+
  // Complete the build of all elements so they are fully functional
  unsigned n_element = Bulk_mesh_pt->nelement();
  for(unsigned e=0;e<n_element;e++)
@@ -349,6 +377,31 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   }
  // Set the boundary conditions
  apply_boundary_conditions();
+
+
+ // Find element/local coordinate within it, that contains the
+ // central point
+ Vector<double> origin(2,0.0);
+
+ // Create a MeshAsGeomObject from the Mesh:
+ MeshAsGeomObject mesh_as_geom_object(Bulk_mesh_pt);
+ 
+ // Make space for local coordinate in element pointed to by Central_element_pt
+ // that contains central point
+ Central_point_local_coord.resize(2);
+
+ // Find it!
+ mesh_as_geom_object.locate_zeta(origin,Central_element_geom_obj_pt,
+                                   Central_point_local_coord);
+
+ // Did that work out?
+ if(Central_element_geom_obj_pt==0)
+  {
+   throw OomphLibError("couldn't find central element",
+                       OOMPH_CURRENT_FUNCTION,
+                       OOMPH_EXCEPTION_LOCATION);
+  }
+ 
 } // end of complete
 
 
@@ -358,42 +411,175 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 {
- // The free boundary condition is completely unpinned
- static const Vector<unsigned> free{};
 
+
+ //------------------------------------------------------------------
+ //------------------------------------------------------------------
+ // Boundary conditions for FvK elements are complicated and we
+ // provide an illustration how to apply all practically relevant
+ // boundary conditions for problems with axis aligned boundaries
+ // here. Other tutorials/driver codes explain what to do about
+ // (i) straight boundaries that are not aligned with the coordinate axes
+ // and (ii) curvilinear boundaries.
+ //
+ // FvK elements have two different types of degrees of freedom:
+ // (1) The ones associated with the two in-plane displacements.
+ //     These are interpolated with standard C0 continuous Lagrange
+ //     interpolation between all the nodes in the underlying
+ //     TElement<2,NNODE_1D>. Each node stores a single value
+ //     associated with the two displacement directions, enumerated
+ //     0 for the x displacement, and 1 for the y displacement.
+ // (2) The dofs associated with the out-of-plane displacements.
+ //     These are interpolated with Bell (Hermite) interpolants
+ //     which involv sixe different types of degree of freedom,
+ //     enumerated from 0 to 5 in the order w, w_x, w_y, w_xx, w_xy,
+ //     w_yy, and they are only stored at three vertices of the element.
+ //
+ // Given that the book-keeping re which node stores which type of
+ // degree of freedom is complicated, we let the element do the
+ // assigment for us. For this purpose the FvK elements provide
+ // two member functions:
+ //
+ //     fix_in_plane_displacement_dof(idof, b, fct_pt)
+ //
+ // assigns boundary conditions for the in-plane displacements via
+ // the specification of
+ //
+ // idof   : the enumeration of the dof in the scheme listed above,
+ //          so idof can take values 0 or 1 and if specified 
+ //          indicates that this degree of freedom should be pinned.
+ // b      : the mesh boundary along which the boundary condition is
+ //          to be applied
+ // fct_pt : a function pointer to a global function with arguments
+ //         (const Vector<double> x, double& value) which computes
+ //         the value for the relevant in-plane displacement as a
+ //         function of the coordinate, x, a 2D vector. Note that,
+ //         given that boundary is assumed to be aligned with the
+ //         coordinate axes one of the two coordinates will be
+ //         irrelevant, but is still passed to the function.
+ //
+ // 
+ //           
+ //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
+ //
+ // hierher complete once Aidan has signed off the explanation above.
+ //
+ //
+ //
+ // The following vectors list the enumerated degrees of freedom
+ // to be pinned for various physically meaningful boundary conditions:
+
+ 
+ // Case: Totally free boundary, nothing to be pinned
+ const Vector<unsigned> free{};
+
+
+ 
  // In-plane dofs:
+ //---------------
  // |  0  |  1  |
  // |  ux |  uy |
- // Possible boundary conditions on the in-plane displacement
- static const Vector<unsigned> pin_ux_dofs{0};
- static const Vector<unsigned> pin_uy_dofs{1};
- static const Vector<unsigned> pin_inplane_dofs{0,1};
+
+
+ // Vectors specifying in-plane dofs to be pinned to impose
+ // various physical boundary conditions on the in-plane
+ // displacement
+
+ // Case: Pin x in-plane displacement only:
+ const Vector<unsigned> pin_ux_pinned_dof{0};
+
+ // Case: Pin y in-plane displacement only:
+ const Vector<unsigned> pin_uy_pinned_dof{1};
+
+ // Case: Pin both in-plane displacements
+ const Vector<unsigned> pin_ux_and_uy_pinned_dof{0,1};
+
+
  
  // Out-of-plane dofs:
+ //-------------------
  // |  0  |  1  |  2  |  3  |  4  |  5  |
  // |  w  | w_x | w_y | w_xx| w_xy| w_yy|
- // Possible boundary conditions depending on whether an edge is x-normal or
- // y-normal
- static const Vector<unsigned> resting_pin_xn_dofs{0,2,5};
- static const Vector<unsigned> resting_pin_yn_dofs{0,1,3};
- static const Vector<unsigned> sliding_clamp_xn_dofs{1,4};
- static const Vector<unsigned> sliding_clamp_yn_dofs{2,4};
- static const Vector<unsigned> true_clamp_xn_dofs{0,1,2,4,5};
- static const Vector<unsigned> true_clamp_yn_dofs{0,1,2,3,4};
 
+ 
+ // Possible boundary conditions for out-of-plane displacements:
+ // Given that the out-of-plane displacements feature in the fourth-order
+ // biharmonic operator, we can apply boundary conditions on w and
+ // dw/dn, where n is the coordinate direction normal to the (assumed to be
+ // axis aligned!) boundary. However if w and dw/dn are given along the entire
+ // boundary (parametrised by the tangential coordinate, t) we also know what
+ // dw/dt and d^2w/dndt are. In the various cases below we identify physical
+ // scenarios of a pinned edge (w given, dw/dn left free); a vertically
+ // sliding edge (w left free; dw/dn given) and fully_clampled (w and dw/dn
+ // given). Together with the two possible orientations of the axis aligned
+ // boundaries (x aligned or y aligned we get six different cases:
+ 
+
+ // Case: The plate is pinned (w given, dw/dn left free) along a boundary
+ // where the outer unit normal points in the postive or negative
+ // x direction, so x is constant and y varies along the boundary.
+ // We therefore have to pin (and assign values for) w, dw/dy and d^2/dy^2
+ const Vector<unsigned> pinned_edge_xn_pinned_dof{0,2,5};
+
+ // Case: The plate is pinned (w given, dw/dn left free) along a boundary
+ // where the outer unit normal points in the postive or negative
+ // y direction, so y is constant and x varies along the boundary.
+ // We have to pin (and assign values for) w, dw/dx and d^2/dx^2
+ const Vector<unsigned> pinned_edge_yn_pinned_dof{0,1,3};
+
+ 
+ // Case: The plate is sliding (w left free, dw/dn given) along a boundary
+ // where the outer unit normal points in the postive or negative
+ // x direction, so x is constant and y varies along the boundary.
+ // We therefore have to pin (and assign values for) dw/dx and d^2/dxdy
+ const Vector<unsigned> sliding_clamp_xn_dof{1,4};
+
+ 
+ // Case: The plate is sliding (w left free, dw/dn given) along a boundary
+ // where the outer unit normal points in the postive or negative
+ // y direction, so y is constant and x varies along the boundary.
+ // We therefore have to pin (and assign values for) dw/dy and d^2/dxdy
+ const Vector<unsigned> sliding_clamp_yn_dof{2,4};
+
+ 
+ // Case: The plate is clamped (w given, dw/dn given) along a boundary
+ // where the outer unit normal points in the postive or negative
+ // x direction, so x is constant and y varies along the boundary.
+ // We therefore have to pin (and assign values for) w, dw/dx,
+ // dw/dy, d^2w/dxdy and d^2/dy^2
+ const Vector<unsigned> true_clamp_xn_dof{0,1,2,4,5};
+
+ 
+ // Case: The plate is clamped (w given, dw/dn given) along a boundary
+ // where the outer unit normal points in the postive or negative
+ // y direction, so y is constant and x varies along the boundary.
+ // We therefore have to pin (and assign values for) w, dw/dx,
+ // dw/dy, d^2w/dx^2 and d^2/dxdy
+ const Vector<unsigned> true_clamp_yn_dof{0,1,2,3,4};
+
+
+ //------------------------------------------------------------------
+ //------------------------------------------------------------------
+
+ 
  // Vectors to store which boundary conditions we are applying to each edge.
  Vector<Vector<unsigned>> pinned_u_dofs(4);
  Vector<Vector<unsigned>> pinned_w_dofs(4);
  
- // Choose BCs for each boundary
- pinned_u_dofs[0] = pin_inplane_dofs;
- pinned_u_dofs[1] = pin_inplane_dofs;
- pinned_u_dofs[2] = pin_inplane_dofs;
- pinned_u_dofs[3] = pin_inplane_dofs;
- pinned_w_dofs[0] = resting_pin_yn_dofs;
- pinned_w_dofs[1] = resting_pin_xn_dofs;
- pinned_w_dofs[2] = resting_pin_yn_dofs;
- pinned_w_dofs[3] = resting_pin_xn_dofs;
+ // Pin both in-plane displacements everywhere
+ pinned_u_dofs[0] = pin_ux_and_uy_pinned_dof;
+ pinned_u_dofs[1] = pin_ux_and_uy_pinned_dof;
+ pinned_u_dofs[2] = pin_ux_and_uy_pinned_dof;
+ pinned_u_dofs[3] = pin_ux_and_uy_pinned_dof;
+
+ // Use pinned edge boundary conditions for the out-of-plane
+ // displacements. Boundaries 0 and 2 are are constant y,
+ // boundaries 1 and 3 are constant x:
+ pinned_w_dofs[0] = pinned_edge_yn_pinned_dof;
+ pinned_w_dofs[1] = pinned_edge_xn_pinned_dof;
+ pinned_w_dofs[2] = pinned_edge_yn_pinned_dof;
+ pinned_w_dofs[3] = pinned_edge_xn_pinned_dof;
+
  
  // Loop over all the boundaries in our bulk mesh
  unsigned n_bound = Bulk_mesh_pt->nboundary();
@@ -412,22 +598,27 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
      ELEMENT* el_pt =
       dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
 
-     // Pin in-plane dofs at edge b - always null because we are applying
-     // homogenous bcs
+     // Pin in-plane dofs (enumerated as explained above) for
+     // all nodes on boundary b. Here we're applying homogeneous
+     // BCs so all pinned values are simply set to zero.
      for(unsigned i=0; i<n_pinned_u_dofs; i++)
       {
        unsigned idof=pinned_u_dofs[b][i];
-       el_pt->fix_in_plane_displacement_dof(idof, b, Parameters::get_null_fct);
+       el_pt->fix_in_plane_displacement_dof(idof, b,
+                                            Parameters::get_null_fct);
       }
-     // Pin out-of-plane dofs at edge b - always null because we are applying
-     // homogenous bcs
+     // Pin out-of-plane dofs (enumerated as explained above) for all
+     // nodes on boundary b. Here we're applying homogeneous BCs so
+     // all pinned values are simply set to zero.
      for(unsigned i=0; i<n_pinned_w_dofs; i++)
       {
        unsigned idof=pinned_w_dofs[b][i];
-       el_pt->fix_out_of_plane_displacement_dof(idof, b, Parameters::get_null_fct);
+       el_pt->fix_out_of_plane_displacement_dof(idof, b,
+                                                Parameters::get_null_fct);
       }
     } // end for loop over elements on b
   } // end for loop over boundaries
+
 } // end set bc
 
 
@@ -441,22 +632,25 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
  ofstream some_file;
  char filename[100];
  
- unsigned npts;
- // Number of plot points for coarse output
- npts = 2;
+
+ // Number of plot points for coarse output (just showing the
+ // element outline)
+ unsigned npts = 2;
  sprintf(filename, "%s/coarse_soln_%i.dat",
-	 Parameters::Output_dir.c_str(),
+	 Doc_info.directory().c_str(),
 	 Doc_info.number());
  some_file.open(filename);
  Bulk_mesh_pt->output(some_file,npts);
  some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
 	   << comment << "\"\n";
  some_file.close();
-
- // Number of plot points for fine output
+ 
+ // Number of plot points for fine output. Lots of plot points so
+ // we see the goodness of the high-order Hermite/Bell
+ // interpolation. 
  npts = 10;
  sprintf(filename, "%s/soln_%i.dat",
-	 Parameters::Output_dir.c_str(),
+	 Doc_info.directory().c_str(),
 	 Doc_info.number());
  some_file.open(filename);
  Bulk_mesh_pt->output(some_file,npts);
@@ -465,62 +659,48 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
  some_file.close();
 
 
- some_file.open(filename);
- Bulk_mesh_pt->output(some_file,npts);
- some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
-	   << comment << "\"\n";
- some_file.close();
+ 
+ // Write the load magnitude and centrepoint displacements to trace file
+ Vector<double> w_centre(12,0.0);
 
- // Write the pressure, degree of swelling and
- // deflection to the trace file
- //-----------------------------------------------------
- // Get the centre deflection first
- Vector<double> origin(2,0.0), s(2,0.0);
- GeomObject* centre_element_pt;
- Vector<double> w_centre(1,0.0);
+ // hierher: Aidan: rename this function to
+ // interpolated_foeppl_von_karman_values(s)
+ // and tidy it up; it's a total mess!!!
+ //
+ // However, it appears to return:
+ // 
+ // interpolated_f[0] = interpolated_w[0]; // w
+ // interpolated_f[1] = interpolated_dwdxi(0, 0); // dwdx
+ // interpolated_f[2] = interpolated_dwdxi(0, 1); // dwdy
+ // interpolated_f[3] = interpolated_d2wdxi2(0, 0); // d2wdx2
+ // interpolated_f[4] = interpolated_d2wdxi2(0, 1); // d2wdxdy
+ // interpolated_f[5] = interpolated_d2wdxi2(0, 2); // d2wdy2
+ // interpolated_f[6] = interpolated_u[0]; // ux
+ // interpolated_f[7] = interpolated_u[1]; // uy
+ // interpolated_f[8] = interpolated_dudxi(0, 0); // duxdx
+ // interpolated_f[9] = interpolated_dudxi(0, 1); // duxdy
+ // interpolated_f[10] = interpolated_dudxi(1, 0); // duydx
+ // interpolated_f[11] = interpolated_dudxi(1, 1); // duydy
+ //
+ // Make this clear in the doxygen-documented comments on top
+ // of the function.
+ 
+ w_centre = dynamic_cast<ELEMENT*>(Central_element_geom_obj_pt)
+  ->interpolated_u_foeppl_von_karman(Central_point_local_coord);
   
- unsigned n_element=Bulk_mesh_pt->nelement();
- for(unsigned i=0; i<n_element; i++)
-  {
-   dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(i))
-    ->locate_zeta(origin, centre_element_pt, s);
-   if(centre_element_pt!=NULL)
-    {
-     w_centre = dynamic_cast<ELEMENT*>(centre_element_pt)
-      ->interpolated_u_foeppl_von_karman(s);
-     break;
-    }
-  }
- Trace_file << Doc_info.number()          << " "
-	    << Parameters::P_mag                     << " "
-	    << w_centre[0]                       << endl;
 
- // Increment the doc_info numbers
+ Trace_file << Parameters::P_mag  << " "
+  	    << Parameters::T_mag  << " "
+	    << w_centre[0]        << " " 
+ 	    << w_centre[6]        << " " 
+ 	    << w_centre[7]        << " "
+            << Doc_info.number()  << endl;
+
+ // Bump
  Doc_info.number()++;
 
 } // end of doc
 
-//============start_of_delete_flux_elements==============================
-/// Delete Poisson Flux Elements and wipe the surface mesh
-//=======================================================================
-template<class ELEMENT>
-void UnstructuredFvKProblem<ELEMENT>
-::delete_traction_elements(Mesh* const &surface_mesh_pt)
-{
- // How many surface elements are in the surface mesh
- unsigned n_element = surface_mesh_pt->nelement();
-
- // Loop over the surface elements
- for(unsigned e=0;e<n_element;e++)
-  {
-   // Kill surface element
-   delete surface_mesh_pt->element_pt(e);
-  }
-
- // Wipe the mesh
- surface_mesh_pt->flush_element_and_node_storage();
-
-} // end of delete_flux_elements
 
 
 //=======start_of_main========================================
@@ -531,22 +711,18 @@ int main(int argc, char **argv)
 {
  feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
  
- // Create the problem
+ // Create the problem, using FvK elements derived from TElement<2,4>
+ // elements (with 4 nodes per element edge and 10 nodes overall).
  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
   problem;
+
+ // Set pressure
+ Parameters::P_mag=10.0;
  
- // Set solver paramters
- problem.newton_solver_tolerance()=1e-8;
- problem.max_residuals()=1e4;
- problem.max_newton_iterations()=10;
- 
- // Increase the pressure under the membrane
- Parameters::P_mag+=10;
  // Solve the system
  problem.newton_solve();
+ 
  // Document the current solution
  problem.doc_solution();
  
- // Print success
- oomph_info<<"Exiting Normally\n";
 } //End of main
