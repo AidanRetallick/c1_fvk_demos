@@ -32,7 +32,7 @@
 #include "generic.h"
 
 // The equations
-#include "C1_foeppl_von_karman.h"
+#include "c1_foeppl_von_karman.h"
 
 // The mesh
 #include "meshes/triangle_mesh.h"
@@ -70,10 +70,10 @@ namespace Parameters
  }
  
  // Pressure wrapper so we can output the pressure function
- void get_pressure(const Vector<double>& X, Vector<double>& pressure)
+ void get_pressure(const Vector<double>& x, Vector<double>& pressure)
  {
   pressure.resize(1);
-  get_pressure(X,pressure[0]);
+  get_pressure(x,pressure[0]);
  }
  
  // Assigns the value of in-plane forcing depending on the position (x,y)
@@ -88,7 +88,7 @@ namespace Parameters
  // Functions to assign boundary conditions
  
  // Null function for any zero (homogenous) BCs
- void get_null_fct(const Vector<double>& X, double& value)
+ void get_null_fct(const Vector<double>& x, double& value)
  {
   value = 0.0;
  }
@@ -131,7 +131,7 @@ public:
  /// Setup and build the mesh
  void build_mesh();
 
- /// \short Helper function to (re-)set boundary condition
+ /// Helper function to (re-)set boundary condition
  /// and complete the build of all elements
  void complete_problem_setup();
 
@@ -143,7 +143,7 @@ public:
  {
   // For what control parameter are we about to solve?
   oomph_info << "-------------------------------------------------------" << std::endl;
-  oomph_info << "Solving for p = " << Parameters::p_mag << std::endl;
+  oomph_info << "Solving for p = " << Parameters::P_mag << std::endl;
   oomph_info << "     Doc_info = " << Doc_info.number() << std::endl;
   oomph_info << "-------------------------------------------------------" << std::endl;
  }
@@ -154,7 +154,7 @@ public:
  /// Doc the solution
  void doc_solution(const std::string& comment="");
   
- /// \short Overloaded version of the problem's access function to
+ /// Overloaded version of the problem's access function to
  /// the mesh. Recasts the pointer to the base Mesh object to
  /// the actual mesh type.
  TriangleMesh<ELEMENT>* mesh_pt()
@@ -184,7 +184,7 @@ private:
  /// Trace file to document norm of solution
  ofstream Trace_file;
 
- /// \short Delete traction elements and wipe the surface mesh
+ /// Delete traction elements and wipe the surface mesh
  void delete_traction_elements(Mesh* const &surface_mesh_pt);
 
  /// Pointer to "bulk" mesh
@@ -203,7 +203,7 @@ private:
 template<class ELEMENT>
 UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
  :
- Element_area(Parameters::element_area)
+ Element_area(Parameters::Element_area)
 {
  // Build the mesh
  build_mesh();
@@ -213,17 +213,17 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
 
  char filename[100];
  ofstream Param_file;
- strcpy(filename, (Parameters::output_dir + "/parameters.dat").c_str());
+ strcpy(filename, (Parameters::Output_dir + "/parameters.dat").c_str());
  Param_file.open(filename);
 
  // Output plate parameters
  Param_file << "L            " << Parameters::L         << std::endl
-	    << "thickness    " << Parameters::thickness << std::endl
-	    << "nu           " << Parameters::nu        << std::endl
-	    << "eta          " << Parameters::eta       << std::endl
-	    << "Element area " << Parameters::element_area << std::endl;
+	    << "thickness    " << Parameters::Thickness << std::endl
+	    << "nu           " << Parameters::Nu        << std::endl
+	    << "eta          " << Parameters::Eta       << std::endl
+	    << "Element area " << Parameters::Element_area << std::endl;
  
- strcpy(filename, (Parameters::output_dir + "/trace.dat").c_str());
+ strcpy(filename, (Parameters::Output_dir + "/trace.dat").c_str());
  Trace_file.open(filename);
  
  oomph_info << "Number of equations: "
@@ -344,8 +344,8 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
    el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
 
    // Assign the parameter function pointers for the element
-   el_pt->nu_pt() = &Parameters::nu;
-   el_pt->eta_pt() = &Parameters::eta;
+   el_pt->nu_pt() = &Parameters::Nu;
+   el_pt->eta_pt() = &Parameters::Eta;
   }
  // Set the boundary conditions
  apply_boundary_conditions();
@@ -445,7 +445,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
  // Number of plot points for coarse output
  npts = 2;
  sprintf(filename, "%s/coarse_soln_%i.dat",
-	 Parameters::output_dir.c_str(),
+	 Parameters::Output_dir.c_str(),
 	 Doc_info.number());
  some_file.open(filename);
  Bulk_mesh_pt->output(some_file,npts);
@@ -456,7 +456,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
  // Number of plot points for fine output
  npts = 10;
  sprintf(filename, "%s/soln_%i.dat",
-	 Parameters::output_dir.c_str(),
+	 Parameters::Output_dir.c_str(),
 	 Doc_info.number());
  some_file.open(filename);
  Bulk_mesh_pt->output(some_file,npts);
@@ -492,7 +492,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
     }
   }
  Trace_file << Doc_info.number()          << " "
-	    << Parameters::p_mag                     << " "
+	    << Parameters::P_mag                     << " "
 	    << w_centre[0]                       << endl;
 
  // Increment the doc_info numbers
@@ -529,11 +529,10 @@ void UnstructuredFvKProblem<ELEMENT>
 //============================================================
 int main(int argc, char **argv)
 {
- 
  feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
  
  // Create the problem
- UnstructuredFvKProblem<FoepplVonKarmanC1CurvedBellElement<4>>
+ UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
   problem;
  
  // Set solver paramters
@@ -542,7 +541,7 @@ int main(int argc, char **argv)
  problem.max_newton_iterations()=10;
  
  // Increase the pressure under the membrane
- Parameters::p_mag+=10;
+ Parameters::P_mag+=10;
  // Solve the system
  problem.newton_solve();
  // Document the current solution

@@ -32,11 +32,10 @@
 #include "generic.h"
 
 // The equations
-#include "C1_foeppl_von_karman.h"
+#include "c1_foeppl_von_karman.h"
 
 // The mesh
 #include "meshes/triangle_mesh.h"
-#include "C1_basis/my_geom_object.h"
 
 using namespace std;
 using namespace oomph;
@@ -92,7 +91,7 @@ namespace Parameters
  /// (needed to update boundary elements to curved)
  CurvilineCircleTop parametric_arc;
 
- typedef void norm_and_tan_func(const Vector<double>&,
+ typedef void Norm_and_tan_func(const Vector<double>&,
 				Vector<double>&,
 				Vector<double>&,
 				DenseMatrix<double>&,
@@ -103,16 +102,16 @@ namespace Parameters
  void get_normal_and_tangent_straight_boundary_0(const Vector<double>& x,
 						 Vector<double>& n,
 						 Vector<double>& t,
-						 DenseMatrix<double>& Dn,
-						 DenseMatrix<double>& Dt)
+						 DenseMatrix<double>& dn,
+						 DenseMatrix<double>& dt)
  {
   // Endpoints
-  Vector<double> X0(2, 0.0);
-  Vector<double> X1(2, 0.0);
-  X1[0] = 1.0;
+  Vector<double> x0(2, 0.0);
+  Vector<double> x1(2, 0.0);
+  x1[0] = 1.0;
 
-  double dx = X1[0] - X0[0];
-  double dy = X1[1] - X0[1];
+  double dx = x1[0] - x0[0];
+  double dy = x1[1] - x0[1];
   double mag = sqrt(dx*dx + dy*dy);
    
   // Fill in the normal and derivatives of the normal
@@ -124,12 +123,12 @@ namespace Parameters
   t[1] = dy/mag;
 
   // Zero derivatives for straight lines
-  Dn(0,0) = 0.0;
-  Dn(1,0) = 0.0;
-  Dn(0,1) = 0.0;
-  Dn(1,1) = 0.0;
+  dn(0,0) = 0.0;
+  dn(1,0) = 0.0;
+  dn(0,1) = 0.0;
+  dn(1,1) = 0.0;
 
-  Dt = Dn;
+  dt = dn;
  }
 
  /// The normal and tangential directions. We need the derivatives so we can form
@@ -137,17 +136,17 @@ namespace Parameters
  void get_normal_and_tangent_straight_boundary_1(const Vector<double>& x,
 						 Vector<double>& n,
 						 Vector<double>& t,
-						 DenseMatrix<double>& Dn,
-						 DenseMatrix<double>& Dt)
+						 DenseMatrix<double>& dn,
+						 DenseMatrix<double>& dt)
  {
   // Endpoints
-  Vector<double> X0(2, 0.0);
-  Vector<double> X1(2, 0.0);
-  X0[0] = cos(Alpha);
-  X0[1] = sin(Alpha);
+  Vector<double> x0(2, 0.0);
+  Vector<double> x1(2, 0.0);
+  x0[0] = cos(Alpha);
+  x0[1] = sin(Alpha);
 
-  double dx = X1[0] - X0[0];
-  double dy = X1[1] - X0[1];
+  double dx = x1[0] - x0[0];
+  double dy = x1[1] - x0[1];
   double mag = sqrt(dx*dx + dy*dy);
    
   // Fill in the normal and derivatives of the normal
@@ -159,12 +158,12 @@ namespace Parameters
   t[1] = dy/mag;
 
   // Zero derivatives for straight lines
-  Dn(0,0) = 0.0;
-  Dn(1,0) = 0.0;
-  Dn(0,1) = 0.0;
-  Dn(1,1) = 0.0;
+  dn(0,0) = 0.0;
+  dn(1,0) = 0.0;
+  dn(0,1) = 0.0;
+  dn(1,1) = 0.0;
 
-  Dt = Dn;
+  dt = dn;
  }
   
  /// The normal and tangential directions. We need the derivatives so we can form
@@ -172,8 +171,8 @@ namespace Parameters
  void get_normal_and_tangent_circular_arc(const Vector<double>& x,
 					  Vector<double>& n,
 					  Vector<double>& t,
-					  DenseMatrix<double>& Dn,
-					  DenseMatrix<double>& Dt)
+					  DenseMatrix<double>& dn,
+					  DenseMatrix<double>& dt)
  {
   double mag = sqrt(x[0]*x[0] + x[1]*x[1]);
   
@@ -182,19 +181,19 @@ namespace Parameters
   n[1] = x[1]/mag;
 
   // The (x,y) derivatives of the (x,y) components
-  Dn(0,0) = x[1]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-  Dn(1,0) =-x[1]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-  Dn(0,1) =-x[0]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-  Dn(1,1) = x[0]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(0,0) = x[1]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(1,0) =-x[1]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(0,1) =-x[0]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(1,1) = x[0]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
 
   // Fill in the tangent and derivatives of the tangent
   t[0] =-x[1]/mag;
   t[1] = x[0]/mag;
 
-  Dt(0,0) =-Dn(1,0);
-  Dt(1,0) = Dn(0,0);
-  Dt(0,1) =-Dn(1,1);
-  Dt(1,1) = Dn(0,1);
+  dt(0,0) =-dn(1,0);
+  dt(1,0) = dn(0,0);
+  dt(0,1) =-dn(1,1);
+  dt(1,1) = dn(0,1);
  }
 
  //                           PROBLEM DEFINITIONS
@@ -243,25 +242,25 @@ namespace Parameters
  // (e.g. sin along arc 0<theta<Alpha)
 
  /// Sin along circular arc for w BC
- void get_w_along_arc(const Vector<double>& X, double& value)
+ void get_w_along_arc(const Vector<double>& x, double& value)
  {
-  value = Boundary_amp * sin( 2.0*Pi*atan2(X[1],X[0]) / Alpha );
+  value = Boundary_amp * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
  }
  
  /// Cos along circular arc for dw/dt BC
- void get_dwdt_along_arc(const Vector<double>& X, double& value)
+ void get_dwdt_along_arc(const Vector<double>& x, double& value)
  {
-  value = 2.0*Pi/Alpha * Boundary_amp * cos( 2.0*Pi*atan2(X[1],X[0]) / Alpha );
+  value = 2.0*Pi/Alpha * Boundary_amp * cos( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
  }
 
  /// -Sin along circular arc for d2w/dt2 BC
- void get_d2wdt2_along_arc(const Vector<double>& X, double& value)
+ void get_d2wdt2_along_arc(const Vector<double>& x, double& value)
  {
-  value = -pow(2.0*Pi/Alpha,2.0) * Boundary_amp * sin( 2.0*Pi*atan2(X[1],X[0]) / Alpha );
+  value = -pow(2.0*Pi/Alpha,2.0) * Boundary_amp * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
  }
  
  /// Null function for any zero (homogenous) BCs
- void get_null_fct(const Vector<double>& X, double& value)
+ void get_null_fct(const Vector<double>& x, double& value)
  {
   value = 0.0;
  }
@@ -594,15 +593,15 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // Vector<unsigned> circular_arc_pinned_w_dofs = true_clamp_dofs;
  
  // Allocate storage for the number of elements and dofs
- unsigned nb_element;
- unsigned n_pinned_u_dofs;
- unsigned n_pinned_w_dofs;
- 
- // Loop over the circular arc elements
- nb_element = Bulk_mesh_pt->nboundary_element(Circular_arc_bnum);
+ unsigned n_b_element = 0;
+ unsigned n_pinned_u_dofs = 0;
+ unsigned n_pinned_w_dofs = 0;
+
+  // Loop over the circular arc elements
+ n_b_element = Bulk_mesh_pt->nboundary_element(Circular_arc_bnum);
  n_pinned_u_dofs = circular_arc_pinned_u_dofs.size();
  // n_pinned_w_dofs = circular_arc_pinned_w_dofs.size();
- for(unsigned e=0;e<nb_element;e++)
+ for(unsigned e=0;e<n_b_element;e++)
   {
    // Get pointer to bulk element adjacent to curved arc
    ELEMENT* el_pt =
@@ -621,6 +620,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
     {
      switch(idof)
       {
+       // [hierher] Make function of arclength rather than global x
       case 0:
        // w
        el_pt->fix_out_of_plane_displacement_dof(idof,
@@ -647,10 +647,10 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   } // End loop over boundary elements [e]
 
  // Loop over straight side 0 elements and apply homogenous BCs
- nb_element = Bulk_mesh_pt->nboundary_element(Straight_edge_0_bnum);
+ n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_0_bnum);
  n_pinned_u_dofs = straight_edge_0_pinned_u_dofs.size();
  n_pinned_w_dofs = straight_edge_0_pinned_w_dofs.size();
- for(unsigned e=0;e<nb_element;e++)
+ for(unsigned e=0;e<n_b_element;e++)
   {
    // Get pointer to bulk element adjacent to b
    ELEMENT* el_pt =
@@ -675,10 +675,10 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   } // End loop over boundary elements [e]
 
   // Loop over straight side 1 elements and apply homogenous BCs
- nb_element = Bulk_mesh_pt->nboundary_element(Straight_edge_1_bnum);
+ n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_1_bnum);
  n_pinned_u_dofs = straight_edge_1_pinned_u_dofs.size();
  n_pinned_w_dofs = straight_edge_1_pinned_w_dofs.size();
- for(unsigned e=0;e<nb_element;e++)
+ for(unsigned e=0;e<n_b_element;e++)
   {
    // Get pointer to bulk element adjacent to b
    ELEMENT* el_pt =
@@ -730,7 +730,7 @@ void UnstructuredFvKProblem<ELEMENT >::
 upgrade_edge_elements_to_curve(const unsigned &ibound, Mesh* const &bulk_mesh_pt)
 {
  // These depend on the boundary we are on
- CurvilineGeomObject* parametric_curve_pt;
+ CurvilineGeomObject* parametric_curve_pt = 0;
 
  // Define the functions for each part of the boundary
  switch (ibound)
@@ -827,12 +827,12 @@ void UnstructuredFvKProblem<ELEMENT>::
 rotate_edge_degrees_of_freedom( Mesh* const &bulk_mesh_pt)
 {
  // Store the edge parametrisations in a vector
- Vector<Parameters::norm_and_tan_func*> boundary_parametrisation_pts(3);
- boundary_parametrisation_pts[Circular_arc_bnum] =
+ Vector<Parameters::Norm_and_tan_func*> boundary_parametrisation_pt(3);
+ boundary_parametrisation_pt[Circular_arc_bnum] =
   &Parameters::get_normal_and_tangent_circular_arc;
- boundary_parametrisation_pts[Straight_edge_0_bnum] =
+ boundary_parametrisation_pt[Straight_edge_0_bnum] =
   &Parameters::get_normal_and_tangent_straight_boundary_0;
- boundary_parametrisation_pts[Straight_edge_1_bnum] =
+ boundary_parametrisation_pt[Straight_edge_1_bnum] =
   &Parameters::get_normal_and_tangent_straight_boundary_1;
 
  // Loop over the boundaries
@@ -865,7 +865,7 @@ rotate_edge_degrees_of_freedom( Mesh* const &bulk_mesh_pt)
        // normal / tangent vectors to the element
        el_pt->set_up_rotated_dofs(boundary_nodes.size(),
 				  boundary_nodes,
-				  boundary_parametrisation_pts[b]);
+				  boundary_parametrisation_pt[b]);
       }
     } // End loop over elements [e]
   } // End loop over boundaries [b]

@@ -15,14 +15,14 @@ circular_sector_SOURCES = \
  circular_sector.cc
 #---------------------------------------------------------------------------
 
-clamped_square_inflation_LDADD = -L@libdir@ -lC1_foeppl_von_karman \
- -lC1_basis -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+clamped_square_inflation_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
-circular_disc_LDADD = -L@libdir@ -lC1_foeppl_von_karman \
- -lC1_basis -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+circular_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
-circular_sector_LDADD = -L@libdir@ -lC1_foeppl_von_karman \
- -lC1_basis -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+circular_sector_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 # Local sources that Jack's own code depends on: This code also uses
 # objects from Jack's own library. The source code for this library
@@ -45,5 +45,5 @@ circular_sector_LDADD = -L@libdir@ -lC1_foeppl_von_karman \
 # Automake will replace the variable @includedir@ with the actual
 # include directory.
 
-AM_CPPFLAGS += -I@includedir@ -Wall -ggdb3 -g -O3
+AM_CPPFLAGS += -I@includedir@ -Wall -ggdb3 -Og
 #EXTRA_DIST = Circle1.1.ele Circle1.1.node Circle1.1.poly

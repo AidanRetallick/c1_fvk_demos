@@ -32,11 +32,10 @@
 #include "generic.h"
 
 // The equations
-#include "C1_foeppl_von_karman.h"
+#include "c1_foeppl_von_karman.h"
 
 // The mesh
 #include "meshes/triangle_mesh.h"
-#include "C1_basis/my_geom_object.h"
 
 using namespace std;
 using namespace oomph;
@@ -82,7 +81,7 @@ namespace Parameters
  /// Poisson ratio
  double Nu = 0.5;
  /// Membrane coupling coefficient
- double Eta = 12*(1-Nu*Nu)/(Thickness*Thickness);
+ double Eta = 12.0*(1.0-Nu*Nu)/(Thickness*Thickness);
 
  /// Pressure magnitude
  double P_mag = 0.1;
@@ -100,8 +99,8 @@ namespace Parameters
  void get_normal_and_tangent(const Vector<double>& x,
 			     Vector<double>& n,
 			     Vector<double>& t,
-			     DenseMatrix<double>& Dn,
-			     DenseMatrix<double>& Dt)
+			     DenseMatrix<double>& dn,
+			     DenseMatrix<double>& dt)
  {
   double mag = sqrt(x[0]*x[0] + x[1]*x[1]);
   
@@ -110,19 +109,19 @@ namespace Parameters
   n[1] = x[1]/mag;
 
   // The (x,y) derivatives of the (x,y) components
-  Dn(0,0) = x[1]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-  Dn(1,0) =-x[1]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-  Dn(0,1) =-x[0]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-  Dn(1,1) = x[0]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(0,0) = x[1]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(1,0) =-x[1]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(0,1) =-x[0]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
+  dn(1,1) = x[0]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
 
   // Fill in the tangent and derivatives of the tangent
   t[0] =-x[1]/mag;
   t[1] = x[0]/mag;
 
-  Dt(0,0) =-Dn(1,0);
-  Dt(1,0) = Dn(0,0);
-  Dt(0,1) =-Dn(1,1);
-  Dt(1,1) = Dn(0,1);
+  dt(0,0) =-dn(1,0);
+  dt(1,0) = dn(0,0);
+  dt(0,1) =-dn(1,1);
+  dt(1,1) = dn(0,1);
  }
 
  //                           PROBLEM DEFINITIONS
@@ -133,10 +132,10 @@ namespace Parameters
  }
 
  /// Pressure wrapper so we can output the pressure function
- void get_pressure(const Vector<double>& X, Vector<double>& pressure)
+ void get_pressure(const Vector<double>& x, Vector<double>& pressure)
  {
   pressure.resize(1);
-  get_pressure(X,pressure[0]);
+  get_pressure(x,pressure[0]);
  }
 
  /// Assigns the value of in plane forcing depending on the position (x,y)
@@ -187,7 +186,7 @@ class UnstructuredFvKProblem : public virtual Problem
 public:
 
  /// Constructor
- UnstructuredFvKProblem(double element_area = 0.09);
+ UnstructuredFvKProblem(double const& element_area = 0.09);
 
  /// Destructor
  ~UnstructuredFvKProblem()
@@ -265,8 +264,8 @@ private:
  void actions_after_read_unstructured_meshes()
  {
   // Curved Edges need to be upgraded after the rebuild
-  upgrade_edge_elements_to_curve(0,Bulk_mesh_pt);
-  upgrade_edge_elements_to_curve(1,Bulk_mesh_pt);
+  upgrade_edge_elements_to_curve(Outer_boundary0,Bulk_mesh_pt);
+  upgrade_edge_elements_to_curve(Outer_boundary1,Bulk_mesh_pt);
   // Rotate degrees of freedom
   rotate_edge_degrees_of_freedom(Bulk_mesh_pt);
   // Make the problem fully functional
@@ -322,7 +321,7 @@ private:
 /// Constructor definition
 //======================================================================
 template<class ELEMENT>
-UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
+UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(const double& element_area)
  :
  Element_area(element_area)
 {
@@ -330,8 +329,8 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
  build_mesh();
 
  // Curved Edge upgrade
- upgrade_edge_elements_to_curve(0,Bulk_mesh_pt);
- upgrade_edge_elements_to_curve(1,Bulk_mesh_pt);
+ upgrade_edge_elements_to_curve(Outer_boundary0,Bulk_mesh_pt);
+ upgrade_edge_elements_to_curve(Outer_boundary1,Bulk_mesh_pt);
 
  // Rotate degrees of freedom
  rotate_edge_degrees_of_freedom(Bulk_mesh_pt);
@@ -347,7 +346,12 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
 	    << assign_eqn_numbers() << '\n';
 } // end Constructor
 
+
+
+
+//======================================================================
 /// Set up and build the mesh
+//======================================================================
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 {
