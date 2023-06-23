@@ -75,28 +75,21 @@ namespace Parameters
  /// Pressure depending on the position (x,y)
  void get_pressure(const Vector<double>& x, double& pressure)
  {
-  pressure = P_mag * (x[0]*x[0]+x[1]*x[1]);
+  pressure = P_mag;
  }
  
- // Pressure wrapper so we can output the pressure function
- void get_pressure(const Vector<double>& x, Vector<double>& pressure)
- {
-  pressure.resize(1);
-  get_pressure(x,pressure[0]);
- }
-
  /// Shear stress depending on the position (x,y)
  void get_in_plane_force(const Vector<double>& x, Vector<double>& tau)
  {
-  tau[0]= T_mag * (1.0-x[0]*x[0])*(1.0-x[1]*x[1]);
-  tau[1]= T_mag * (1.0-x[0]*x[0])*(1.0-x[1]*x[1]);
+  tau[0]= T_mag;
+  tau[1]= T_mag;
  }
 
   
  /// Helper function to specify boundary conditions (here all homogeneous)
- /// as a function of both coordinates (convenient in this problem;
+ /// as a function of both coordinates (This is convenient for this problem;
  /// other interfaces that specify boundary conditions in terms of
- /// boundary coordinate exist.
+ /// boundary coordinate exist).
  void get_null_fct(const Vector<double>& x, double& value)
  {
   value = 0.0;
@@ -141,7 +134,6 @@ public:
  /// Print information about the parameters we are trying to solve for.
  void actions_before_newton_solve()
  {
-  // For what control parameter are we about to solve?
   oomph_info << "-------------------------------------------------------"
              << std::endl;
   oomph_info << "Solving for P = " << Parameters::P_mag << std::endl;
@@ -176,7 +168,6 @@ private:
 
  /// Helper function to apply boundary conditions
  void apply_boundary_conditions();
-
 
  /// Triangle mesh parameters
  TriangleMeshParameters* Triangle_mesh_parameters_pt;
@@ -234,18 +225,18 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
  // Complete problem setup
  complete_problem_setup();
 
- // Open trace file
- char filename[100];
- ofstream Param_file;
- strcpy(filename, (Doc_info.directory()+"/parameters.dat").c_str());
- Param_file.open(filename);
 
  // Output parameters
- Param_file << "L            " << Parameters::L         << std::endl
+ oomph_info << "Problem parameters:\n"
+            << "L            " << Parameters::L         << std::endl
 	    << "thickness    " << Parameters::Thickness << std::endl
 	    << "nu           " << Parameters::Nu        << std::endl
 	    << "eta          " << Parameters::Eta       << std::endl
 	    << "Element area " << Parameters::Element_area << std::endl;
+
+
+ // Open trace file
+ char filename[100];
  strcpy(filename, (Doc_info.directory()+"/trace.dat").c_str());
  Trace_file.open(filename);
 
@@ -258,8 +249,7 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
 
 
 //==start_of_build_mesh====================================================
-/// Build the rectangular mesh by specifying the location of the vertices
-/// before assigning them to be the endpoints of the boundary edges.
+/// Build the rectangular mesh
 //=========================================================================
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::build_mesh()
@@ -322,30 +312,30 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
  Boundary1_pt = new TriangleMeshPolyLine(edge1, 1);
  Boundary2_pt = new TriangleMeshPolyLine(edge2, 2);
  Boundary3_pt = new TriangleMeshPolyLine(edge3, 3);
- 
+
+ // Create closed outer boundary
  Vector<TriangleMeshCurveSection*> boundary_polyline_pt(4);
  boundary_polyline_pt[0] = Boundary0_pt;
  boundary_polyline_pt[1] = Boundary1_pt;
  boundary_polyline_pt[2] = Boundary2_pt;
  boundary_polyline_pt[3] = Boundary3_pt;
-
- // Create closed outer boundary
  Boundary_pt = new TriangleMeshClosedCurve(boundary_polyline_pt);
- 
+
+
+ // Define mesh parameters
  TriangleMeshParameters Triangle_mesh_parameters(Boundary_pt);
  
  // Set the maximum element area
  Triangle_mesh_parameters.element_area()=Parameters::Element_area ;
 
- // Build an assign bulk mesh
+ // Build  bulk mesh
  Bulk_mesh_pt=new TriangleMesh<ELEMENT>(Triangle_mesh_parameters);
  
   //Add submesh to problem
  add_sub_mesh(Bulk_mesh_pt);
-
- // hierher superfluous; assign directly to mesh_pt();
  
- // Combine submeshes into a single Mesh
+ // Combine submeshes into a single Mesh (bit over the top here; could
+ // have assigned bulk mesh to mesh_pt() directly).
  build_global_mesh();
 
 }// end build_mesh
@@ -416,28 +406,28 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  //------------------------------------------------------------------
  //------------------------------------------------------------------
  // Boundary conditions for FvK elements are complicated and we
- // provide an illustration how to apply all practically relevant
- // boundary conditions for problems with axis aligned boundaries
+ // provide an illustration of how to apply all physically relevant
+ // boundary conditions for problems with axis-aligned boundaries
  // here. Other tutorials/driver codes explain what to do about
  // (i) straight boundaries that are not aligned with the coordinate axes
  // and (ii) curvilinear boundaries.
  //
  // FvK elements have two different types of degrees of freedom:
- // (1) The ones associated with the two in-plane displacements.
+ // (1) The ones associated with the two in-plane displacements, u_x and u_y.
  //     These are interpolated with standard C0 continuous Lagrange
  //     interpolation between all the nodes in the underlying
- //     TElement<2,NNODE_1D>. Each node stores a single value
- //     associated with the two displacement directions, enumerated
- //     0 for the x displacement, and 1 for the y displacement.
- // (2) The dofs associated with the out-of-plane displacements.
- //     These are interpolated with Bell (Hermite) interpolants
- //     which involv sixe different types of degree of freedom,
+ //     TElement<2,NNODE_1D>. Each node stores the values
+ //     of the two in-plane displacements. We enumerate these dofs
+ //     as 0 for the x displacement, and 1 for the y displacement.
+ // (2) The dofs associated with the out-of-plane displacement, w.
+ //     This is interpolated with Bell (Hermite) interpolants
+ //     which involve six different types of degree of freedom,
  //     enumerated from 0 to 5 in the order w, w_x, w_y, w_xx, w_xy,
- //     w_yy, and they are only stored at three vertices of the element.
+ //     w_yy. These values are only stored at three vertices of the element.
  //
- // Given that the book-keeping re which node stores which type of
+ // Given that the book-keeping for which node stores which type of
  // degree of freedom is complicated, we let the element do the
- // assigment for us. For this purpose the FvK elements provide
+ // relevant assigments for us. For this purpose the FvK elements provide
  // two member functions:
  //
  //     fix_in_plane_displacement_dof(idof, b, fct_pt)
@@ -446,44 +436,42 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // the specification of
  //
  // idof   : the enumeration of the dof in the scheme listed above,
- //          so idof can take values 0 or 1 and if specified 
- //          indicates that this degree of freedom should be pinned.
+ //          so idof can take values 0 or 1.
  // b      : the mesh boundary along which the boundary condition is
  //          to be applied
  // fct_pt : a function pointer to a global function with arguments
- //         (const Vector<double> x, double& value) which computes
- //         the value for the relevant in-plane displacement as a
- //         function of the coordinate, x, a 2D vector. Note that,
- //         given that boundary is assumed to be aligned with the
- //         coordinate axes one of the two coordinates will be
- //         irrelevant, but is still passed to the function.
+ //          (const Vector<double> x, double& value) which computes
+ //          the value for the relevant in-plane displacement as a
+ //          function of the coordinate, x, a 2D vector. Note that,
+ //          since the boundary is assumed to be aligned with the
+ //          coordinate axes, one of the two coordinates will be
+ //          irrelevant, but it is still passed to the function.
  //
- // 
- //           
+ // So, if the function fix_in_plane_displacement_dof(idof, b, fct_pt) is called with idof=1
+ // and b=3, say, the y-in-plane displacement is pinned for all the element's
+ // nodes (if any) that are located on mesh boundary b. The value of the y-in-plane 
+ // displacement is set to whatever the function pointed to by fct_pt computes when
+ // evaluated at the nodal coordinate. 
+ //
+ // Similarly,
+ //
  //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
  //
  // hierher complete once Aidan has signed off the explanation above.
  //
  //
  //
- // The following vectors list the enumerated degrees of freedom
- // to be pinned for various physically meaningful boundary conditions:
+ // Using the conventions introduced above, the following vectors identify
+ // the in-plane and out-of-plane degrees of freedom to be pinned for
+ // various physically meaningful boundary conditions:
 
  
- // Case: Totally free boundary, nothing to be pinned
- const Vector<unsigned> free{};
-
-
  
  // In-plane dofs:
  //---------------
  // |  0  |  1  |
  // |  ux |  uy |
 
-
- // Vectors specifying in-plane dofs to be pinned to impose
- // various physical boundary conditions on the in-plane
- // displacement
 
  // Case: Pin x in-plane displacement only:
  const Vector<unsigned> pin_ux_pinned_dof{0};
@@ -510,35 +498,35 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // boundary (parametrised by the tangential coordinate, t) we also know what
  // dw/dt and d^2w/dndt are. In the various cases below we identify physical
  // scenarios of a pinned edge (w given, dw/dn left free); a vertically
- // sliding edge (w left free; dw/dn given) and fully_clampled (w and dw/dn
+ // sliding edge (w left free; dw/dn given) and fully clamped (w and dw/dn
  // given). Together with the two possible orientations of the axis aligned
- // boundaries (x aligned or y aligned we get six different cases:
+ // boundaries (x aligned or y aligned) we get six different cases:
  
 
  // Case: The plate is pinned (w given, dw/dn left free) along a boundary
  // where the outer unit normal points in the postive or negative
  // x direction, so x is constant and y varies along the boundary.
- // We therefore have to pin (and assign values for) w, dw/dy and d^2/dy^2
+ // We therefore have to pin (and assign values for) w, dw/dy and d^2w/dy^2
  const Vector<unsigned> pinned_edge_xn_pinned_dof{0,2,5};
 
  // Case: The plate is pinned (w given, dw/dn left free) along a boundary
  // where the outer unit normal points in the postive or negative
  // y direction, so y is constant and x varies along the boundary.
- // We have to pin (and assign values for) w, dw/dx and d^2/dx^2
+ // We have to pin (and assign values for) w, dw/dx and d^2w/dx^2
  const Vector<unsigned> pinned_edge_yn_pinned_dof{0,1,3};
 
  
  // Case: The plate is sliding (w left free, dw/dn given) along a boundary
  // where the outer unit normal points in the postive or negative
  // x direction, so x is constant and y varies along the boundary.
- // We therefore have to pin (and assign values for) dw/dx and d^2/dxdy
+ // We therefore have to pin (and assign values for) dw/dx and d^2w/dxdy
  const Vector<unsigned> sliding_clamp_xn_dof{1,4};
 
  
  // Case: The plate is sliding (w left free, dw/dn given) along a boundary
  // where the outer unit normal points in the postive or negative
  // y direction, so y is constant and x varies along the boundary.
- // We therefore have to pin (and assign values for) dw/dy and d^2/dxdy
+ // We therefore have to pin (and assign values for) dw/dy and d^2w/dxdy
  const Vector<unsigned> sliding_clamp_yn_dof{2,4};
 
  
@@ -546,16 +534,16 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // where the outer unit normal points in the postive or negative
  // x direction, so x is constant and y varies along the boundary.
  // We therefore have to pin (and assign values for) w, dw/dx,
- // dw/dy, d^2w/dxdy and d^2/dy^2
- const Vector<unsigned> true_clamp_xn_dof{0,1,2,4,5};
+ // dw/dy, d^2w/dxdy and d^2w/dy^2
+ const Vector<unsigned> fully_clamped_xn_dof{0,1,2,4,5};
 
  
  // Case: The plate is clamped (w given, dw/dn given) along a boundary
  // where the outer unit normal points in the postive or negative
  // y direction, so y is constant and x varies along the boundary.
  // We therefore have to pin (and assign values for) w, dw/dx,
- // dw/dy, d^2w/dx^2 and d^2/dxdy
- const Vector<unsigned> true_clamp_yn_dof{0,1,2,3,4};
+ // dw/dy, d^2w/dx^2 and d^2w/dxdy
+ const Vector<unsigned> fully_clamped_yn_dof{0,1,2,3,4};
 
 
  //------------------------------------------------------------------
@@ -587,7 +575,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   {
    // Number of elements on b
    const unsigned nb_element = Bulk_mesh_pt->nboundary_element(b);
-   // Number of dofs we are pinning on b
+   
+   // Number of dofs we are pinning on boundary b
    const unsigned n_pinned_u_dofs = pinned_u_dofs[b].size();
    const unsigned n_pinned_w_dofs = pinned_w_dofs[b].size();
 
@@ -603,8 +592,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
      // BCs so all pinned values are simply set to zero.
      for(unsigned i=0; i<n_pinned_u_dofs; i++)
       {
-       unsigned idof=pinned_u_dofs[b][i];
-       el_pt->fix_in_plane_displacement_dof(idof, b,
+       unsigned idof_to_be_pinned=pinned_u_dofs[b][i];
+       el_pt->fix_in_plane_displacement_dof(idof_to_be_pinned, b,
                                             Parameters::get_null_fct);
       }
      // Pin out-of-plane dofs (enumerated as explained above) for all
@@ -612,8 +601,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
      // all pinned values are simply set to zero.
      for(unsigned i=0; i<n_pinned_w_dofs; i++)
       {
-       unsigned idof=pinned_w_dofs[b][i];
-       el_pt->fix_out_of_plane_displacement_dof(idof, b,
+       unsigned idof_to_be_pinned=pinned_w_dofs[b][i];
+       el_pt->fix_out_of_plane_displacement_dof(idof_to_be_pinned, b,
                                                 Parameters::get_null_fct);
       }
     } // end for loop over elements on b
