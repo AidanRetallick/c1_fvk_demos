@@ -294,10 +294,10 @@ namespace Parameters
  double Eta=2.39e6;
  
  /// Pressure magnitude
- double P_mag = 0.01;
+ double P_mag = 0.0;
  
  /// In-plane traction magnitude
- double T_mag = 0.0;
+ double T_mag = 0.01;
 
  // hierher what are these objects? Shouldn't they be
  // used in the mesh generatino too; surely they encode the
@@ -362,8 +362,22 @@ namespace Parameters
  /// In plane forcing (shear stress) depending on the position (x,y)
  void get_in_plane_force(const Vector<double>& x, Vector<double>& tau)
  {
-  tau[0] = T_mag * (1.0 - x[0]*x[0] - x[1]*x[1]);
-  tau[1] = T_mag * (1.0 - x[0]*x[0] - x[1]*x[1]);
+
+  // Self-balancing y shear stress over disk:
+  //-----------------------------------------
+  //
+  //   tau_y := 1/4 - y^2;
+  //
+  //   resultant:=int(int(subs(y = r*sin(phi), tau_y)*r, phi = 0 .. 2*Pi), r = 0 .. 1);
+  tau[0] = 0.0;
+  tau[1] = T_mag*(0.25-x[1]*x[1]);
+
+
+  // Self balancing purely radially outward shear stress
+  double phi=atan2(x[1],x[0]);
+  double r_squared=x[0]*x[0]+x[1]*x[1];
+  tau[0]=T_mag*r_squared*cos(phi);
+  tau[1]=T_mag*r_squared*sin(phi);
  }
 
 
@@ -672,13 +686,33 @@ template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_centre_node()
 {
 
+
+ // Choose non-centre node on which we'll supress
+ // the rigid body rotation around the z axis.
+ double max_x_potentially_pinned_node=-DBL_MAX;
+ Node* pinned_rotation_node_pt=0;
+  
  // Pin the node that is at the centre in the domain
  unsigned num_int_nod=Bulk_mesh_pt->nboundary_node(2);
  for (unsigned inod=0;inod<num_int_nod;inod++)
   {
    // Get node point
    Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(2,inod);
+
+   // Check which coordinate increases along this boundary
+   // oomph_info << "node: "
+   //            << nod_pt->x(0) << " "
+   //            << nod_pt->x(1) << " "
+   //            << std::endl;
+
+   // Find the node with the largest x coordinate
+   if (fabs(nod_pt->x(0))>max_x_potentially_pinned_node)
+    {
+     max_x_potentially_pinned_node=fabs(nod_pt->x(0));
+     pinned_rotation_node_pt=nod_pt;
+    }
    
+        
    // If the node is on the other internal boundary too
    if( nod_pt->is_on_boundary(3))
     {
@@ -695,8 +729,19 @@ void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_cent
      nod_pt->set_value(3,0.0);
      nod_pt->pin(4);
      nod_pt->set_value(4,0.0);
+
+
     }
   }
+
+
+   oomph_info << "rotation pinning node: "
+              << pinned_rotation_node_pt->x(0) << " "
+              << pinned_rotation_node_pt->x(1) << " "
+              << std::endl;
+   // Pin y displacement 
+   pinned_rotation_node_pt->pin(1);
+ 
 }
 
 
@@ -960,8 +1005,8 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
  // Number of plot points
  unsigned npts = 30;
 
- sprintf(filename,"%s/soln%i-%f.dat",Doc_info.directory().c_str(),
-         Doc_info.number(),Element_area);
+ sprintf(filename,"%s/soln%i.dat",Doc_info.directory().c_str(),
+         Doc_info.number());
  some_file.open(filename);
  Bulk_mesh_pt->output(some_file,npts);
  some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
@@ -1038,11 +1083,23 @@ int main(int argc, char **argv)
  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>> 
   problem(element_area);
 
- // Do the newton solves
- oomph_info<<"Solving for p=" << Parameters::P_mag << "\n";
- problem.newton_solve();
 
- // Document
- problem.doc_solution();
+ // Loop 
+ Parameters::T_mag =0.0;
+ double dt_mag=0.001;
+ unsigned nstep=10;
+ for (unsigned i=0;i<nstep;i++)
+  {
+    // Do the newton solves
+   oomph_info<<"Solving for P =" << Parameters::P_mag
+             << " ; Tau=" << Parameters::T_mag << "\n";
+   problem.newton_solve();
+   
+   // Document
+   problem.doc_solution();
+
+   // Bump
+   Parameters::T_mag+=dt_mag;
+  }
  
  } //End of main

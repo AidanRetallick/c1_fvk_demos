@@ -1,0 +1,18 @@
+
+# plane stress axisymetric; tau_r scaled on E: div grad u + F = 0
+ode := 1/(1-nu^2)*diff(diff(r*u(r), r)/r, r) + tau_r;
+
+soln:=dsolve(ode,u(r));
+U_gen(r):=rhs(subs(_C2=0,soln));
+
+bc:=subs(r=1,lambda*1/r*diff(r*U_gen(r),r)+2*mu*diff(U_gen(r),r));
+
+
+_C1_soln:=solve(bc,_C1);
+
+U(r):=subs(_C1=_C1_soln,U_gen(r));
+
+u_at_origin_test:=subs(r=0,U(r));
+bc_test:=simplify(subs(U_gen(r)=U(r),_C1=_C1_soln,bc));
+ode_test:=simplify(subs(u(r)=U(r),ode));
+
