@@ -285,7 +285,7 @@ namespace Parameters
  };
 
  /// Which case are we doing
- unsigned Problem_case=Axisymmetric_shear_buckling;
+ unsigned Problem_case=Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
  
  // Ellipse half axis
  double A = 1.0;
@@ -365,6 +365,11 @@ namespace Parameters
    {
     pressure = P_mag*(0.25-x[0]*x[0]-x[1]*x[1]);
    }
+  // Parabolic pressure distribution with zero mean
+  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
+   {
+    pressure = P_mag*(0.25-x[0]*x[0]-x[1]*x[1]);
+   }
   else
    {
     throw OomphLibError("Unexpected problem setup",
@@ -388,11 +393,19 @@ namespace Parameters
   // Self balancing purely radially outward shear stress
   else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
    {
-    // Self balancing purely radially outward shear stress
     double phi=atan2(x[1],x[0]);
     double r_squared=x[0]*x[0]+x[1]*x[1];
     tau[0]=T_mag*r_squared*cos(phi);
     tau[1]=T_mag*r_squared*sin(phi);
+   }
+  // Self-balancing y shear stress over disk:
+  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
+   {
+    //   tau_y := 1/4 - y^2;
+    //
+    //   resultant:=int(int(subs(y = r*sin(phi), tau_y)*r, phi = 0 .. 2*Pi), r = 0 .. 1);
+    tau[0] = 0.0;
+    tau[1] = T_mag*(0.25-x[1]*x[1]);
    }
   else
    {
@@ -400,17 +413,6 @@ namespace Parameters
                         OOMPH_CURRENT_FUNCTION,
                         OOMPH_EXCEPTION_LOCATION);
    }
-
-
-  
-  // // Self-balancing y shear stress over disk:
-  // //-----------------------------------------
-  // //
-  // //   tau_y := 1/4 - y^2;
-  // //
-  // //   resultant:=int(int(subs(y = r*sin(phi), tau_y)*r, phi = 0 .. 2*Pi), r = 0 .. 1);
-  // tau[0] = 0.0;
-  // tau[1] = T_mag*(0.25-x[1]*x[1]);
 
  }
 
@@ -1138,6 +1140,14 @@ int main(int argc, char **argv)
   }
  // 
  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+  {
+   nstep=100;
+   dp_mag=0.0;
+   dt_mag=0.000001;
+   Parameters::P_mag=0.001;
+   Parameters::T_mag=0.0;
+  }
+ else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
   {
    nstep=100;
    dp_mag=0.0;
