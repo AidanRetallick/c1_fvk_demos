@@ -70,7 +70,7 @@ using MathematicalConstants::Pi;
 
 
 // hierher: we should probably insist on this being done in any case. Is it
-//          obvious to the user that they have a fifth order buondary
+//          obvious to the user that they have a fifth order boundary
 //          representation?
 
 // 3.* (For 5 order boundary representation) The second tangential derivative
@@ -274,15 +274,25 @@ private:
 //========================================================================
 namespace Parameters
 {
+
+
+
+ // Enumeration of cases
+ enum{
+  Clamped_validation,
+  Axisymmetric_shear_buckling,
+  Nonaxisymmetric_shear_buckling
+ };
+
+ /// Which case are we doing
+ unsigned Problem_case=Axisymmetric_shear_buckling;
+ 
  // Ellipse half axis
  double A = 1.0;
 
  // Other ellipse half axis
  double B = 1.0;
- 
- // /// The plate thickness
- // double Thickness = 0.1;
- 
+  
  /// Poisson ratio
  double Nu = 0.5;
 
@@ -297,7 +307,7 @@ namespace Parameters
  double P_mag = 0.0;
  
  /// In-plane traction magnitude
- double T_mag = 0.01;
+ double T_mag = 0.00;
 
  // hierher what are these objects? Shouldn't they be
  // used in the mesh generatino too; surely they encode the
@@ -346,14 +356,20 @@ namespace Parameters
  void get_pressure(const Vector<double>& x, double& pressure)
  {
   // Constant pressure for validation case
-  if (CommandLineArgs::command_line_flag_has_been_set("--use_clamped_bc"))
+  if (Parameters::Problem_case==Parameters::Clamped_validation)
    {
     pressure = P_mag;
    }
   // Parabolic pressure distribution with zero mean
-  else
+  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
    {
     pressure = P_mag*(0.25-x[0]*x[0]-x[1]*x[1]);
+   }
+  else
+   {
+    throw OomphLibError("Unexpected problem setup",
+                        OOMPH_CURRENT_FUNCTION,
+                        OOMPH_EXCEPTION_LOCATION);
    }
  }
 
@@ -363,21 +379,39 @@ namespace Parameters
  void get_in_plane_force(const Vector<double>& x, Vector<double>& tau)
  {
 
-  // Self-balancing y shear stress over disk:
-  //-----------------------------------------
-  //
-  //   tau_y := 1/4 - y^2;
-  //
-  //   resultant:=int(int(subs(y = r*sin(phi), tau_y)*r, phi = 0 .. 2*Pi), r = 0 .. 1);
-  tau[0] = 0.0;
-  tau[1] = T_mag*(0.25-x[1]*x[1]);
-
-
+  // Zero shear stress for validation case
+  if (Parameters::Problem_case==Parameters::Clamped_validation)
+   {
+    tau[0]=0.0;
+    tau[1]=0.0;
+   }
   // Self balancing purely radially outward shear stress
-  double phi=atan2(x[1],x[0]);
-  double r_squared=x[0]*x[0]+x[1]*x[1];
-  tau[0]=T_mag*r_squared*cos(phi);
-  tau[1]=T_mag*r_squared*sin(phi);
+  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+   {
+    // Self balancing purely radially outward shear stress
+    double phi=atan2(x[1],x[0]);
+    double r_squared=x[0]*x[0]+x[1]*x[1];
+    tau[0]=T_mag*r_squared*cos(phi);
+    tau[1]=T_mag*r_squared*sin(phi);
+   }
+  else
+   {
+    throw OomphLibError("Unexpected problem setup",
+                        OOMPH_CURRENT_FUNCTION,
+                        OOMPH_EXCEPTION_LOCATION);
+   }
+
+
+  
+  // // Self-balancing y shear stress over disk:
+  // //-----------------------------------------
+  // //
+  // //   tau_y := 1/4 - y^2;
+  // //
+  // //   resultant:=int(int(subs(y = r*sin(phi), tau_y)*r, phi = 0 .. 2*Pi), r = 0 .. 1);
+  // tau[0] = 0.0;
+  // tau[1] = T_mag*(0.25-x[1]*x[1]);
+
  }
 
 
@@ -679,8 +713,6 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 
 //==start_of_pin_all_displacements_and_rotation_at_centre_node======================
 /// pin all displacements and rotations in the centre
-// hierher don't we need another in plane displacement pinned to avoid rotations
-// about the z axis?
 //==============================================================================
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_centre_node()
@@ -787,7 +819,7 @@ template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 {
   // Clamp it
-  if (CommandLineArgs::command_line_flag_has_been_set("--use_clamped_bc"))
+ if (Parameters::Problem_case==Parameters::Clamped_validation)
   {
    // Set the boundary conditions
    unsigned nbound = 2;
@@ -811,11 +843,12 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
       }
     }
   }
- // Pin and stop rotation in the centre
-  else
+ // All other cases: simply pin and stop rotation via the centre
+ else
   {
    pin_all_displacements_and_rotation_at_centre_node();
   }
+
  
 } // end set bc
 
@@ -1076,6 +1109,11 @@ int main(int argc, char **argv)
 
 
 
+  // Constant pressure for validation case
+  if (CommandLineArgs::command_line_flag_has_been_set("--use_clamped_bc"))
+   {
+    Parameters::Problem_case=Parameters::Clamped_validation;
+   }
 
  // Build problem
  // UnstructuredFvKProblem<NON_WRAPPED_ELEMENT
@@ -1084,15 +1122,39 @@ int main(int argc, char **argv)
   problem(element_area);
 
 
- // Loop 
- Parameters::T_mag =0.0;
- double dt_mag=0.001;
- unsigned nstep=10;
+ double dp_mag=0.000001;
+ double dt_mag=0.000001;
+ unsigned nstep=1000;
+
+
+ // Which case are we doing
+ if (Parameters::Problem_case==Parameters::Clamped_validation)
+  {
+   nstep=1;
+   dp_mag=0.01;
+   dt_mag=0.000001;
+   Parameters::P_mag=0.01;
+   Parameters::T_mag=0.0;
+  }
+ // 
+ else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+  {
+   nstep=100;
+   dp_mag=0.0;
+   dt_mag=0.000001;
+   Parameters::P_mag=0.001;
+   Parameters::T_mag=0.0;
+  }
+    
+ // Loop
  for (unsigned i=0;i<nstep;i++)
   {
-    // Do the newton solves
-   oomph_info<<"Solving for P =" << Parameters::P_mag
-             << " ; Tau=" << Parameters::T_mag << "\n";
+   oomph_info<< "Solving for P = "
+             << Parameters::P_mag
+             << " ; Tau = " 
+             << Parameters::T_mag << "\n";
+
+   // Do it
    problem.newton_solve();
    
    // Document
@@ -1100,6 +1162,8 @@ int main(int argc, char **argv)
 
    // Bump
    Parameters::T_mag+=dt_mag;
+   Parameters::P_mag+=dp_mag;
+
   }
  
  } //End of main
