@@ -440,7 +440,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // b      : the mesh boundary along which the boundary condition is
  //          to be applied
  // fct_pt : a function pointer to a global function with arguments
- //          (const Vector<double> x, double& value) which computes
+ //          (const Vector<double>& x, double& value) which computes
  //          the value for the relevant in-plane displacement as a
  //          function of the coordinate, x, a 2D vector. Note that,
  //          since the boundary is assumed to be aligned with the
@@ -461,11 +461,15 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  //
  //
  //
+
+
+
+
+ 
  // Using the conventions introduced above, the following vectors identify
  // the in-plane and out-of-plane degrees of freedom to be pinned for
  // various physically meaningful boundary conditions:
 
- 
  
  // In-plane dofs:
  //---------------
@@ -514,7 +518,6 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // y direction, so y is constant and x varies along the boundary.
  // We have to pin (and assign values for) w, dw/dx and d^2w/dx^2
  const Vector<unsigned> pinned_edge_yn_pinned_dof{0,1,3};
-
  
  // Case: The plate is sliding (w left free, dw/dn given) along a boundary
  // where the outer unit normal points in the postive or negative
@@ -522,13 +525,11 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // We therefore have to pin (and assign values for) dw/dx and d^2w/dxdy
  const Vector<unsigned> sliding_clamp_xn_dof{1,4};
 
- 
  // Case: The plate is sliding (w left free, dw/dn given) along a boundary
  // where the outer unit normal points in the postive or negative
  // y direction, so y is constant and x varies along the boundary.
  // We therefore have to pin (and assign values for) dw/dy and d^2w/dxdy
  const Vector<unsigned> sliding_clamp_yn_dof{2,4};
-
  
  // Case: The plate is clamped (w given, dw/dn given) along a boundary
  // where the outer unit normal points in the postive or negative
@@ -536,7 +537,6 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  // We therefore have to pin (and assign values for) w, dw/dx,
  // dw/dy, d^2w/dxdy and d^2w/dy^2
  const Vector<unsigned> fully_clamped_xn_dof{0,1,2,4,5};
-
  
  // Case: The plate is clamped (w given, dw/dn given) along a boundary
  // where the outer unit normal points in the postive or negative
