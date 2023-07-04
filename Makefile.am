@@ -1,6 +1,7 @@
 # Name of executables: The prefix "noinst" means the executables don't
 # have to be installed anywhere.
 noinst_PROGRAMS = clamped_square_inflation \
+		  rotated_square \
 		  circular_disc \
 		  circular_sector
 include $(top_srcdir)/config/makefile_templates/demo_drivers
@@ -9,6 +10,8 @@ include $(top_srcdir)/config/makefile_templates/demo_drivers
 # Local sources that each code depends on:
 clamped_square_inflation_SOURCES = \
  clamped_square_inflation.cc
+rotated_square_SOURCES = \
+ rotated_square.cc
 circular_disc_SOURCES = \
  circular_disc.cc
 circular_sector_SOURCES = \
@@ -16,6 +19,9 @@ circular_sector_SOURCES = \
 #---------------------------------------------------------------------------
 
 clamped_square_inflation_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+rotated_square_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 circular_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
