@@ -1,10 +1,23 @@
+
+include $(top_srcdir)/config/makefile_templates/demo_drivers
+
 # Name of executables: The prefix "noinst" means the executables don't
 # have to be installed anywhere.
 noinst_PROGRAMS = clamped_square_inflation \
 		  rotated_square \
 		  circular_disc \
-		  circular_sector
-include $(top_srcdir)/config/makefile_templates/demo_drivers
+		  circular_sector \
+                  axisym_displ_based_fvk
+
+#----------------------------------------------------------------------
+
+# Sources for executable
+axisym_displ_based_fvk_SOURCES = axisym_displ_based_fvk.cc 
+
+# Required libraries: 
+axisym_displ_based_fvk_LDADD = -L@libdir@  -laxisym_displ_based_foeppl_von_karman -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+
 #---------------------------------------------------------------------------
 
 # Local sources that each code depends on:
