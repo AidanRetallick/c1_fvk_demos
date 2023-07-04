@@ -98,6 +98,217 @@ namespace oomph
 {
 
 
+/////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+
+ 
+  /// \short Specialisation of CurvilineGeomObject for half a circle.
+  class MatthiasCurvilineCircleTop : public CurvilineGeomObject
+  {
+  public:
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleTop()
+     : CurvilineGeomObject(), Radius(1.0), Clockwise_zeta(false)
+    {
+    }
+
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleTop(const double& radius, const bool& clockwise_zeta)
+      : CurvilineGeomObject(), Radius(radius), Clockwise_zeta(clockwise_zeta)
+    {
+    }
+    /// \short Constructor: pass # of Eulerian and Lagrangian coordinates
+    /// and pointer to time-stepper which is used to handle the
+    /// position at previous timesteps and allows the evaluation
+    /// of veloc/acceleration etc. in cases where the GeomData
+    /// varies with time.
+    MatthiasCurvilineCircleTop(TimeStepper* time_stepper_pt)
+      : CurvilineGeomObject(time_stepper_pt)
+    {
+    }
+
+    /// Broken copy constructor
+    MatthiasCurvilineCircleTop(const MatthiasCurvilineCircleTop& dummy)
+    {
+      BrokenCopy::broken_copy("MatthiasCurvilineCircleTop");
+    }
+
+    /// Broken assignment operator
+    void operator=(const MatthiasCurvilineCircleTop&)
+    {
+      BrokenCopy::broken_assign("MatthiasCurvilineCircleTop");
+    }
+
+    /// (Empty) destructor
+    virtual ~MatthiasCurvilineCircleTop() {}
+
+    /// \short Position Vector w.r.t. to zeta:
+    virtual void position(const Vector<double>& zeta, Vector<double>& r) const
+    {
+      r[0] = -Radius * std::sin(zeta[0]);
+      r[1] = Radius * std::cos(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        r[0] *= -1;
+      }
+    }
+
+    /// \short Derivative of position Vector w.r.t. to zeta:
+    virtual void dposition(const Vector<double>& zeta,
+                           Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = -Radius * std::cos(zeta[0]);
+      drdzeta[1] = -Radius * std::sin(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        drdzeta[0] *= -1;
+      }
+    }
+
+
+    /// \short 2nd derivative of position Vector w.r.t. to coordinates:
+    /// \f$ \frac{d^2R_i}{d \zeta_\alpha d \zeta_\beta}\f$ =
+    /// ddrdzeta(alpha,beta,i).
+    /// Evaluated at current time.
+    virtual void d2position(const Vector<double>& zeta,
+                            Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = Radius * std::sin(zeta[0]);
+      drdzeta[1] = -Radius * std::cos(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        drdzeta[0] *= -1;
+      }
+    }
+
+    /// Get s from x for part 0 of the boundary (inverse mapping - for
+    /// convenience)
+    double get_zeta(const Vector<double>& x) const
+    {
+      // The arc length (parametric parameter) for the upper semi circular arc
+      return (Clockwise_zeta ? atan2(x[0], x[1]) : atan2(-x[0], x[1]));
+    }
+
+  private:
+    double Radius;
+    bool Clockwise_zeta;
+  };
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+
+ 
+  /// \short Specialisation of CurvilineGeomObject for half a circle.
+  class MatthiasCurvilineCircleBottom : public CurvilineGeomObject
+  {
+  public:
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleBottom()
+     : CurvilineGeomObject(), Radius(1.0), Clockwise_zeta(false)
+    {
+    }
+
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleBottom(const double& radius, const bool& clockwise_zeta)
+      : CurvilineGeomObject(), Radius(radius), Clockwise_zeta(clockwise_zeta)
+    {
+    }
+
+    /// \short Constructor: pass # of Eulerian and Lagrangian coordinates
+    /// and pointer to time-stepper which is used to handle the
+    /// position at previous timesteps and allows the evaluation
+    /// of veloc/acceleration etc. in cases where the GeomData
+    /// varies with time.
+    MatthiasCurvilineCircleBottom(TimeStepper* time_stepper_pt)
+      : CurvilineGeomObject(time_stepper_pt)
+    {
+    }
+
+    /// Broken copy constructor
+    MatthiasCurvilineCircleBottom(const MatthiasCurvilineCircleBottom& dummy)
+    {
+      BrokenCopy::broken_copy("MatthiasCurvilineCircleBottom");
+    }
+
+    /// Broken assignment operator
+    void operator=(const MatthiasCurvilineCircleBottom&)
+    {
+      BrokenCopy::broken_assign("MatthiasCurvilineCircleBottom");
+    }
+
+    /// (Empty) destructor
+    virtual ~MatthiasCurvilineCircleBottom() {}
+
+    /// \short Position Vector w.r.t. to zeta:
+    virtual void position(const Vector<double>& zeta, Vector<double>& r) const
+    {
+      r[0] = Radius * std::sin(zeta[0]);
+      r[1] = -Radius * std::cos(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        r[1] *= -1;
+      }
+    }
+
+    /// \short Derivative of position Vector w.r.t. to zeta:
+    virtual void dposition(const Vector<double>& zeta,
+                           Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = Radius * std::cos(zeta[0]);
+      drdzeta[1] = Radius * std::sin(zeta[0]);
+      if (Clockwise_zeta)
+      {
+        drdzeta[1] *= -1;
+      }
+    }
+
+
+    /// \short 2nd derivative of position Vector w.r.t. to coordinates:
+    /// \f$ \frac{d^2R_i}{d \zeta_\alpha d \zeta_\beta}\f$ =
+    /// ddrdzeta(alpha,beta,i).
+    /// Evaluated at current time.
+    virtual void d2position(const Vector<double>& zeta,
+                            Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = -Radius * std::sin(zeta[0]);
+      drdzeta[1] = Radius * std::cos(zeta[0]);
+      if (Clockwise_zeta)
+      {
+        drdzeta[1] *= -1;
+      }
+    }
+
+    /// Get s from x for part 0 of the boundary (inverse mapping - for
+    /// convenience)
+    double get_zeta(const Vector<double>& x) const
+    {
+      // The arc length (parametric parameter) for the upper semi circular arc
+      return (Clockwise_zeta ? atan2(x[0], x[1]) : atan2(x[0], -x[1]));
+    }
+
+  private:
+    double Radius;
+    bool Clockwise_zeta;
+  };
+
+/////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ 
+
  // hierher
  typedef FoepplVonKarmanC1CurvableBellElement<4> NON_WRAPPED_ELEMENT;
  
@@ -314,10 +525,10 @@ namespace Parameters
  // same information.
  
  /// Parametric curve for the upper half boundary
- CurvilineCircleTop parametric_curve_top;
+ MatthiasCurvilineCircleTop parametric_curve_top;
 
  /// Parametric curve for the lower half boundary
- CurvilineCircleBottom parametric_curve_bottom;
+ MatthiasCurvilineCircleBottom parametric_curve_bottom;
 
 
  // hierher still mystified by this function; must be automatable.
@@ -701,6 +912,31 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
  // Build an assign bulk mesh
  Bulk_mesh_pt=new TriangleMesh<ELEMENT>(mesh_parameters);
  
+ // Loop over the boundary nodes adjacent to boundary ibound
+ Vector<double> bnd_zeta(1,0.0);
+ for (unsigned ibound=0;ibound<2;ibound++)
+  {
+   const unsigned n_node=Bulk_mesh_pt->nboundary_node(ibound);
+   for(unsigned j=0; j<n_node; j++)
+    {
+     // Get pointer to boundary node adjacent to b
+     // BoundaryNode<Node>* bnd_nod_pt = 
+     //  dynamic_cast<BoundaryNode<Node>*>(Bulk_mesh_pt->boundary_node_pt(ibound,j));
+     Node* bnd_nod_pt = Bulk_mesh_pt->boundary_node_pt(ibound,j);
+     unsigned k_type=0;
+     bnd_nod_pt->get_coordinates_on_boundary(ibound,k_type,bnd_zeta);
+     oomph_info << "ibound j bnd_nod_pt "
+                << ibound << " "
+                << j << " "
+                << bnd_nod_pt << " "
+                << bnd_nod_pt->x(0) << " "
+                << bnd_nod_pt->x(1) << " "
+                << bnd_zeta[0] << " " 
+                << std::endl;
+    }
+  }
+
+
   //Add submesh to problem
  add_sub_mesh(Bulk_mesh_pt);
   
@@ -941,11 +1177,34 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
    // a tolerance. Needs a redesign!
    
    // s at the next (cyclic) node after interior
-   const double s_ubar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+1) % 3]);
+   double s_ubar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+1) % 3]);
    
    // s at the previous (cyclic) node before interior
-   const double s_obar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+2) % 3]);
+   double s_obar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+2) % 3]);
+
+
+   Node* first_node_pt=bulk_el_pt->node_pt((index_of_interior_node+1) % 3);
+   Node* second_node_pt=bulk_el_pt->node_pt((index_of_interior_node+2) % 3);
    
+   
+   unsigned k_type=0;
+   Vector<double> first_bnd_zeta(1,0.0);
+   first_node_pt->get_coordinates_on_boundary(ibound,k_type,first_bnd_zeta);
+   Vector<double> second_bnd_zeta(1,0.0);
+   second_node_pt->get_coordinates_on_boundary(ibound,k_type,second_bnd_zeta);
+   
+       
+   oomph_info
+    << "s_ubar s_obar "
+    << s_ubar << " "
+    << s_obar << " "
+    << first_bnd_zeta[0] << " "
+    << second_bnd_zeta[0] << " " 
+    << std::endl;
+
+   // s_ubar=first_bnd_zeta[0];
+   // s_obar=second_bnd_zeta[0];
+       
    // Assign edge case
    edge = static_cast<MyC1CurvedElements::Edge>(index_of_interior_node);
 
@@ -972,6 +1231,8 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
       OOMPH_EXCEPTION_LOCATION);
     } // end checks
 
+
+       
    // Upgrade it // hierher what is "3"?
    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,3);
   }
