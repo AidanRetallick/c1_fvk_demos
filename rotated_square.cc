@@ -37,10 +37,10 @@
 
 // The mesh
 #include "meshes/triangle_mesh.h"
-
+    
 using namespace std;
 using namespace oomph;
-
+using MathematicalConstants::Pi;
 
 
 //===========================================================================
@@ -48,17 +48,21 @@ using namespace oomph;
 //===========================================================================
 namespace Parameters
 {
-  /// Rotated square half-diagonal
-  double A = sqrt(2.0)/2.0;
+  /// Square edge length
+  double L = 1.0;
+
+  /// Angle of rotation (radians obviously)
+  double Alpha = Pi/5.0;
   
-  /// Plate vertices [zdec] not square
+  /// Plate vertices. For the unrotated square, these coincide with:
+  ///     L/2*{(1,1), (-1,1), (-1,-1), (1,-1)}
   Vector<Vector<double>> Vertices =
-    {
-     {A, 0.0},
-     {0.0, A},
-     {-A, 0.0},
-     {0.0, -A}
-    };
+  {
+    { L/2.0*cos(Alpha)-L/2.0*sin(Alpha),  L/2.0*sin(Alpha)+L/2.0*cos(Alpha)},
+    {-L/2.0*cos(Alpha)-L/2.0*sin(Alpha), -L/2.0*sin(Alpha)+L/2.0*cos(Alpha)},
+    {-L/2.0*cos(Alpha)+L/2.0*sin(Alpha), -L/2.0*sin(Alpha)-L/2.0*cos(Alpha)},
+    { L/2.0*cos(Alpha)+L/2.0*sin(Alpha),  L/2.0*sin(Alpha)-L/2.0*cos(Alpha)}
+  };
  
   /// The plate thickness
   double Thickness = 0.01;
@@ -78,7 +82,7 @@ namespace Parameters
   double T_mag = 0.0;
  
   /// Element size
-  double Element_area=0.1;
+  double Element_area=0.01;
 
   
   // ---- Parametric boundaries ------------------------------------------------
@@ -125,6 +129,9 @@ namespace Parameters
     dt = dn;
   }
   
+  //--------------------------------------------------------------------------
+  // Wrappers to the generic straight line boundary rotation
+
   /// The normal and tangential directions for boundary 0. We need the
   /// derivatives so we can form the Hessian and the Jacobian of the rotation
   void get_normal_and_tangent_straight_boundary_0(const Vector<double>& x,
@@ -237,7 +244,7 @@ namespace Parameters
 template<class ELEMENT>
 class UnstructuredFvKProblem : public virtual Problem
 {
-
+  
 public:
 
   /// Constructor
@@ -263,12 +270,12 @@ public:
   void actions_before_newton_solve()
   {
     oomph_info << "-------------------------------------------------------"
-	       << std::endl;
+    << std::endl;
     oomph_info << "Solving for P = " << Parameters::P_mag << std::endl;
     oomph_info << "Solving for T = " << Parameters::T_mag << std::endl;
     oomph_info << "         step = " << Doc_info.number() << std::endl;
     oomph_info << "-------------------------------------------------------"
-	       << std::endl;
+    << std::endl;
   }
 
   /// Update after solve (empty)
@@ -276,24 +283,35 @@ public:
 
   /// Doc the solution
   void doc_solution(const std::string& comment="");
-  
+
+  // [zdec] This doesn't work, dynamic cast always fails -- returns 0
+  // /// Overloaded version of the problem's access function to
+  // /// the mesh. Recasts the pointer to the base Mesh object to
+  // /// the actual mesh type.
+  // TriangleMesh<ELEMENT>* mesh_pt()
+  // {
+  //   oomph_info << Problem::mesh_pt() << std::endl;
+  //   oomph_info << dynamic_cast<TriangleMesh<ELEMENT>*> (Problem::mesh_pt()) << std::endl;
+  //   return dynamic_cast<TriangleMesh<ELEMENT>*> (Problem::mesh_pt());
+  // }
+
   /// Overloaded version of the problem's access function to
   /// the mesh. Recasts the pointer to the base Mesh object to
   /// the actual mesh type.
   TriangleMesh<ELEMENT>* mesh_pt()
   {
-    return dynamic_cast<TriangleMesh<ELEMENT>*> (Bulk_mesh_pt);
+    return Bulk_mesh_pt;
   }
- 
+  
 private:
-
+  
   /// Setup and build the mesh
   void build_mesh();
-
+  
   /// Helper function to (re-)set boundary condition
   /// and complete the build of all elements
   void complete_problem_setup();
-
+  
   /// Loop over all edge elements and rotate the Hermite degrees of freedom
   /// to be in the directions of the two in-plane vectors specified in Parameters
   void rotate_edge_degrees_of_freedom(Mesh* const &bulk_mesh_pt);
@@ -325,17 +343,26 @@ private:
   /// Trace file to document norm of solution
   ofstream Trace_file;
 
-  /// Keep track of boundary ids
+  /// Keep track of boundary ids, (b)ottom, (r)ight, (t)op, (l)eft
+  // (slightly redundant in this example)
+  // ((after rotation this naming convention is unhelpful))
   enum
-    {
-     Boundary_0_bnum = 0,
-     Boundary_1_bnum = 1,
-     Boundary_2_bnum = 2,
-     Boundary_3_bnum = 3
-    };
+  {
+    Boundary_b_bnum = 0,
+    Boundary_r_bnum = 1,
+    Boundary_t_bnum = 2,
+    Boundary_l_bnum = 3
+  };
 
   /// Pointer to "bulk" mesh
   TriangleMesh<ELEMENT>* Bulk_mesh_pt;
+ 
+  /// Pointer to element that contains the central point
+  GeomObject* Central_element_geom_obj_pt;
+
+  /// Local coordinate in element pointed to by Central_element_pt
+  /// that contains central point
+  Vector<double> Central_point_local_coord;
  
 }; // end_of_problem_class
 
@@ -362,12 +389,15 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
   // Complete problem setup
   complete_problem_setup();
 
+
   // Output parameters
   oomph_info << "Problem parameters:\n"
-	     << "thickness    " << Parameters::Thickness << std::endl
-	     << "nu           " << Parameters::Nu        << std::endl
-	     << "eta          " << Parameters::Eta       << std::endl
-	     << "Element area " << Parameters::Element_area << std::endl;
+  << "L            " << Parameters::L         << std::endl
+  << "Alpha        " << Parameters::Alpha     << std::endl
+  << "thickness    " << Parameters::Thickness << std::endl
+  << "nu           " << Parameters::Nu        << std::endl
+  << "eta          " << Parameters::Eta       << std::endl
+  << "Element area " << Parameters::Element_area << std::endl;
 
 
   // Open trace file
@@ -378,7 +408,7 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
 
   // Assign equation numbers
   oomph_info << "Number of equations: "
-	     << assign_eqn_numbers() << '\n';
+  << assign_eqn_numbers() << '\n';
  
 } // end Constructor
 
@@ -389,6 +419,9 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 {
+  // *********************************************************************
+  // ********** THIS DIAGRAM IS WRONG NOW THAT WE USE L & Alpha **********
+  // *********************************************************************
   //=================================//
   //  Rotated square mesh boundary   //
   //                                 //
@@ -476,21 +509,20 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   // Complete the build of all elements so they are fully functional
   unsigned n_element = Bulk_mesh_pt->nelement();
   for(unsigned e=0;e<n_element;e++)
-    {
-      // Upcast from GeneralisedElement to the present element
-      ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
+  {
+    // Upcast from GeneralisedElement to the present element
+    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
 
-      //Set the pressure & temperature function pointers and the physical constants
-      el_pt->pressure_fct_pt() = &Parameters::get_pressure;
-      el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
+    //Set the pressure & temperature function pointers and the physical constants
+    el_pt->pressure_fct_pt() = &Parameters::get_pressure;
+    el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
 
-      // Assign the parameter function pointers for the element
-      el_pt->nu_pt() = &Parameters::Nu;
-      el_pt->eta_pt() = &Parameters::Eta;
-    }
+    // Assign the parameter function pointers for the element
+    el_pt->nu_pt() = &Parameters::Nu;
+    el_pt->eta_pt() = &Parameters::Eta;
+  }
   // Set the boundary conditions
-  // [zdec] DONT apply bcs for our experiment (unnecessary)
-  // apply_boundary_conditions();
+  apply_boundary_conditions();
  
 } // end of complete
 
@@ -514,50 +546,48 @@ rotate_edge_degrees_of_freedom( Mesh* const &bulk_mesh_pt)
 
   // Store the edge parametrisations in a vector
   Vector<Parameters::Norm_and_tan_func*> boundary_parametrisation_pt(n_boundaries);
-  boundary_parametrisation_pt[Boundary_0_bnum] =
+  boundary_parametrisation_pt[Boundary_b_bnum] =
     &Parameters::get_normal_and_tangent_straight_boundary_0;
-  boundary_parametrisation_pt[Boundary_1_bnum] =
+  boundary_parametrisation_pt[Boundary_r_bnum] =
     &Parameters::get_normal_and_tangent_straight_boundary_1;
-  boundary_parametrisation_pt[Boundary_2_bnum] =
+  boundary_parametrisation_pt[Boundary_t_bnum] =
     &Parameters::get_normal_and_tangent_straight_boundary_2;
-  boundary_parametrisation_pt[Boundary_3_bnum] =
+  boundary_parametrisation_pt[Boundary_l_bnum] =
     &Parameters::get_normal_and_tangent_straight_boundary_3;
 
-  // // Loop over the boundaries
-  // for(unsigned b=0; b<n_boundaries; b++)
-  // [zdec] For our experiment, only rotate boundary 0
-  unsigned b=0;
+  // Loop over the boundaries
+  for(unsigned b=0; b<n_boundaries; b++)
+  {
+    // Loop over the bulk elements
+    unsigned n_element = bulk_mesh_pt-> nelement();
+    for(unsigned e=0; e<n_element; e++)
     {
-      // Loop over the bulk elements
-      unsigned n_element = bulk_mesh_pt-> nelement();
-      for(unsigned e=0; e<n_element; e++)
-	{
-	  // Get pointer to bulk element
-	  ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
+      // Get pointer to bulk element
+      ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
 
-	  // Calculate which nodes are on boundary b
-	  const unsigned nnode=3;
+      // Calculate which nodes are on boundary b
+      const unsigned nnode=3;
 
-	  // Count the number of boundary nodes on boundary b
-	  Vector<unsigned> boundary_nodes;
-	  for (unsigned n=0; n<nnode;++n)
-	    {
-	      // Rotate nodes if on boundary b
-	      if (el_pt->node_pt(n)->is_on_boundary(b))
-		{ boundary_nodes.push_back(n); }
-	    }
+      // Count the number of boundary nodes on boundary b
+      Vector<unsigned> boundary_nodes;
+      for (unsigned n=0; n<nnode;++n)
+      {
+	// Rotate nodes if on boundary b
+	if (el_pt->node_pt(n)->is_on_boundary(b))
+	{ boundary_nodes.push_back(n); }
+      }
 
-	  // If the element has nodes on the boundary, rotate the Hermite dofs
-	  if(!boundary_nodes.empty())
-	    {
-	      // Rotate the nodes by passing the index of the nodes and the
-	      // normal / tangent vectors to the element
-	      el_pt->set_up_rotated_dofs(boundary_nodes.size(),
-					 boundary_nodes,
-					 boundary_parametrisation_pt[b]);
-	    }
-	} // End loop over elements [e]
-    } // End loop over boundaries [b]
+      // If the element has nodes on the boundary, rotate the Hermite dofs
+      if(!boundary_nodes.empty())
+      {
+	// Rotate the nodes by passing the index of the nodes and the
+	// normal / tangent vectors to the element
+	el_pt->set_up_rotated_dofs(boundary_nodes.size(),
+				   boundary_nodes,
+				   boundary_parametrisation_pt[b]);
+      }
+    } // End loop over elements [e]
+  } // End loop over boundaries [b]
 }// end rotate_edge_degrees_of_freedom
 
 
@@ -591,8 +621,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // (2) The dofs associated with the out-of-plane displacement, w.
   //     This is interpolated with Bell (Hermite) interpolants
   //     which involve six different types of degree of freedom,
-  //     enumerated from 0 to 5 in the order w, w_x, w_y, w_xx, w_xy,
-  //     w_yy. These values are only stored at three vertices of the element.
+  //     enumerated from 0 to 5 in the order w, w_n, w_t, w_nn, w_nt,
+  //     w_tt. These values are only stored at three vertices of the element.
   //
   // Given that the book-keeping for which node stores which type of
   // degree of freedom is complicated, we let the element do the
@@ -611,14 +641,11 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // fct_pt : a function pointer to a global function with arguments
   //          (const Vector<double> x, double& value) which computes
   //          the value for the relevant in-plane displacement as a
-  //          function of the coordinate, x, a 2D vector. Note that,
-  //          since the boundary is assumed to be aligned with the
-  //          coordinate axes, one of the two coordinates will be
-  //          irrelevant, but it is still passed to the function.
+  //          function of the coordinate, x, a 2D vector.
   //
   // So, if the function fix_in_plane_displacement_dof(idof, b, fct_pt) is called with idof=1
   // and b=3, say, the y-in-plane displacement is pinned for all the element's
-  // nodes (if any) that are located on mesh boundary b. The value of the y-in-plane 
+  // nodes (if any) that are located on mesh boundary 3. The value of the y-in-plane 
   // displacement is set to whatever the function pointed to by fct_pt computes when
   // evaluated at the nodal coordinate. 
   //
@@ -627,7 +654,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
   //
   // hierher complete once Aidan has signed off the explanation above.
-  //
+  // [zdec] "This is all good." -- Aidan
   //
   //
   // Using the conventions introduced above, the following vectors identify
@@ -635,7 +662,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // various physically meaningful boundary conditions:
 
  
- 
+  // [zdec] NOTE THAT THE IN-PLANE DISPLACEMENTS ARENT ROTATED
   // In-plane dofs:
   //---------------
   // |  0  |  1  |
@@ -656,63 +683,38 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // Out-of-plane dofs:
   //-------------------
   // |  0  |  1  |  2  |  3  |  4  |  5  |
-  // |  w  | w_x | w_y | w_xx| w_xy| w_yy|
+  // |  w  | w_n | w_t | w_nn| w_nt| w_tt|
 
  
   // Possible boundary conditions for out-of-plane displacements:
   // Given that the out-of-plane displacements feature in the fourth-order
   // biharmonic operator, we can apply boundary conditions on w and
   // dw/dn, where n is the coordinate direction normal to the (assumed to be
-  // axis aligned!) boundary. However if w and dw/dn are given along the entire
+  // axis aligned!) boundary. However if w is given along the entire
   // boundary (parametrised by the tangential coordinate, t) we also know what
-  // dw/dt and d^2w/dndt are. In the various cases below we identify physical
+  // dw/dt and d^2w/dt^2 are. Similarly, if we are given dw/dn along the 
+  // boundary, (parametrised by the tangential coordinate, t) we also know 
+  // what d^2w/dndt is. In the various cases below we identify physical
   // scenarios of a pinned edge (w given, dw/dn left free); a vertically
   // sliding edge (w left free; dw/dn given) and fully clamped (w and dw/dn
-  // given). Together with the two possible orientations of the axis aligned
-  // boundaries (x aligned or y aligned) we get six different cases:
+  // given). The four possible combinations of boundary condition are:
+  //   fully free    -- nothing given,  
+  //   pinned edge   -- only w(t) given,
+  //   sliding clamp -- only dwdt(t) given,
+  //   fully clamped -- both w(t) and dwdt(t) given.
+
+  // Case: The plate is pinned (w given, dw/dn left free) along a boundary.
+  // We therefore have to pin (and assign values for) w, dw/dt and d^2w/dt^2
+  const Vector<unsigned> pinned_edge_pinned_dof{0,2,5};
+
+  // Case: The plate is sliding (w left free, dw/dn given) along a boundary.
+  // We therefore have to pin (and assign values for) dw/dn and d^2w/dndt
+  const Vector<unsigned> sliding_clamp_pinned_dof{1,4};
  
-
-  // Case: The plate is pinned (w given, dw/dn left free) along a boundary
-  // where the outer unit normal points in the postive or negative
-  // x direction, so x is constant and y varies along the boundary.
-  // We therefore have to pin (and assign values for) w, dw/dy and d^2w/dy^2
-  const Vector<unsigned> pinned_edge_xn_pinned_dof{0,2,5};
-
-  // Case: The plate is pinned (w given, dw/dn left free) along a boundary
-  // where the outer unit normal points in the postive or negative
-  // y direction, so y is constant and x varies along the boundary.
-  // We have to pin (and assign values for) w, dw/dx and d^2w/dx^2
-  const Vector<unsigned> pinned_edge_yn_pinned_dof{0,1,3};
-
- 
-  // Case: The plate is sliding (w left free, dw/dn given) along a boundary
-  // where the outer unit normal points in the postive or negative
-  // x direction, so x is constant and y varies along the boundary.
-  // We therefore have to pin (and assign values for) dw/dx and d^2w/dxdy
-  const Vector<unsigned> sliding_clamp_xn_dof{1,4};
-
- 
-  // Case: The plate is sliding (w left free, dw/dn given) along a boundary
-  // where the outer unit normal points in the postive or negative
-  // y direction, so y is constant and x varies along the boundary.
-  // We therefore have to pin (and assign values for) dw/dy and d^2w/dxdy
-  const Vector<unsigned> sliding_clamp_yn_dof{2,4};
-
- 
-  // Case: The plate is clamped (w given, dw/dn given) along a boundary
-  // where the outer unit normal points in the postive or negative
-  // x direction, so x is constant and y varies along the boundary.
-  // We therefore have to pin (and assign values for) w, dw/dx,
-  // dw/dy, d^2w/dxdy and d^2w/dy^2
-  const Vector<unsigned> fully_clamped_xn_dof{0,1,2,4,5};
-
- 
-  // Case: The plate is clamped (w given, dw/dn given) along a boundary
-  // where the outer unit normal points in the postive or negative
-  // y direction, so y is constant and x varies along the boundary.
-  // We therefore have to pin (and assign values for) w, dw/dx,
-  // dw/dy, d^2w/dx^2 and d^2w/dxdy
-  const Vector<unsigned> fully_clamped_yn_dof{0,1,2,3,4};
+  // Case: The plate is clamped (w given, dw/dn given) along a boundary.
+  // We therefore have to pin (and assign values for) w, dw/dn,
+  // dw/dt, d^2w/dndt and d^2w/dt^2
+  const Vector<unsigned> fully_clamped_pinned_dof{0,1,2,4,5};
 
 
   //------------------------------------------------------------------
@@ -741,41 +743,41 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // Loop over all the boundaries in our bulk mesh
   unsigned n_bound = Bulk_mesh_pt->nboundary();
   for(unsigned b=0;b<n_bound;b++)
-    {
-      // Number of elements on b
-      const unsigned nb_element = Bulk_mesh_pt->nboundary_element(b);
+  {
+    // Number of elements on b
+    const unsigned nb_element = Bulk_mesh_pt->nboundary_element(b);
    
-      // Number of dofs we are pinning on boundary b
-      const unsigned n_pinned_u_dofs = pinned_u_dofs[b].size();
-      const unsigned n_pinned_w_dofs = pinned_w_dofs[b].size();
+    // Number of dofs we are pinning on boundary b
+    const unsigned n_pinned_u_dofs = pinned_u_dofs[b].size();
+    const unsigned n_pinned_w_dofs = pinned_w_dofs[b].size();
 
-      // Loop over the elements on boundary b
-      for(unsigned e=0; e<nb_element; e++)
-	{
-	  // Get pointer to bulk element adjacent to b
-	  ELEMENT* el_pt =
-	    dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
+    // Loop over the elements on boundary b
+    for(unsigned e=0; e<nb_element; e++)
+    {
+      // Get pointer to bulk element adjacent to b
+      ELEMENT* el_pt =
+	dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
 
-	  // Pin in-plane dofs (enumerated as explained above) for
-	  // all nodes on boundary b. Here we're applying homogeneous
-	  // BCs so all pinned values are simply set to zero.
-	  for(unsigned i=0; i<n_pinned_u_dofs; i++)
-	    {
-	      unsigned idof_to_be_pinned=pinned_u_dofs[b][i];
-	      el_pt->fix_in_plane_displacement_dof(idof_to_be_pinned, b,
-						   Parameters::get_null_fct);
-	    }
-	  // Pin out-of-plane dofs (enumerated as explained above) for all
-	  // nodes on boundary b. Here we're applying homogeneous BCs so
-	  // all pinned values are simply set to zero.
-	  for(unsigned i=0; i<n_pinned_w_dofs; i++)
-	    {
-	      unsigned idof_to_be_pinned=pinned_w_dofs[b][i];
-	      el_pt->fix_out_of_plane_displacement_dof(idof_to_be_pinned, b,
-						       Parameters::get_null_fct);
-	    }
-	} // end for loop over elements on b
-    } // end for loop over boundaries
+      // Pin in-plane dofs (enumerated as explained above) for
+      // all nodes on boundary b. Here we're applying homogeneous
+      // BCs so all pinned values are simply set to zero.
+      for(unsigned i=0; i<n_pinned_u_dofs; i++)
+      {
+	unsigned idof_to_be_pinned=pinned_u_dofs[b][i];
+	el_pt->fix_in_plane_displacement_dof(idof_to_be_pinned, b,
+					     Parameters::get_null_fct);
+      }
+      // Pin out-of-plane dofs (enumerated as explained above) for all
+      // nodes on boundary b. Here we're applying homogeneous BCs so
+      // all pinned values are simply set to zero.
+      for(unsigned i=0; i<n_pinned_w_dofs; i++)
+      {
+	unsigned idof_to_be_pinned=pinned_w_dofs[b][i];
+	el_pt->fix_out_of_plane_displacement_dof(idof_to_be_pinned, b,
+						 Parameters::get_null_fct);
+      }
+    } // end for loop over elements on b
+  } // end for loop over boundaries
 
 } // end set bc
 
@@ -793,14 +795,27 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
 
   // Number of plot points for coarse output (just showing the
   // element outline)
-  unsigned  npts = 50;
-  sprintf(filename, "%s/soln_%i.dat",
+  unsigned npts = 2;
+  sprintf(filename, "%s/coarse_soln_%i.dat",
 	  Doc_info.directory().c_str(),
 	  Doc_info.number());
   some_file.open(filename);
   Bulk_mesh_pt->output(some_file,npts);
   some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
 	    << comment << "\"\n";
+  some_file.close();
+ 
+  // Number of plot points for fine (full) output. Lots of plot points so
+  // we see the goodness of the high-order Hermite/Bell
+  // interpolation. 
+  npts = 10;
+  sprintf(filename, "%s/soln_%i.dat",
+	  Doc_info.directory().c_str(),
+	  Doc_info.number());
+  some_file.open(filename);
+  Bulk_mesh_pt->output(some_file,npts);
+  some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
+  << comment << "\"\n";
   some_file.close();
 
 
@@ -829,11 +844,17 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   //
   // Make this clear in the doxygen-documented comments on top
   // of the function.
+ 
+  w_centre = dynamic_cast<ELEMENT*>(Central_element_geom_obj_pt)
+    ->interpolated_u_foeppl_von_karman(Central_point_local_coord);
    
 
   Trace_file << Parameters::P_mag  << " "
-	     << Parameters::T_mag  << " "
-	     << Doc_info.number()  << endl;
+  << Parameters::T_mag  << " "
+	     << w_centre[0]        << " " 
+	     << w_centre[6]        << " " 
+	     << w_centre[7]        << " "
+  << Doc_info.number()  << endl;
 
   // Bump
   Doc_info.number()++;
@@ -855,45 +876,13 @@ int main(int argc, char **argv)
   UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
     problem;  
 
-  
-  // Test the degrees of freedom by looping over the types and plotting their
-  // effect on the deformation
-  
-  // Get pointers to the nodes we are testing on
-  Node* rotated_node_pt = problem.mesh_pt()->boundary_node_pt(0,0);
-  Node* unrotated_node_pt = problem.mesh_pt()->boundary_node_pt(2,0);
-  double value = 0.5;
-  for(unsigned k_type=2; k_type<8; k_type++)
-    {
-      // Do we want to rescale so the higher derivatives are more prominent?
-      if(k_type==3)
-	{ value*= 1.0; }
-      if(k_type==5)
-	{ value*= 1.0; }
-
-      
-      // Reset the previous type to zero
-      if(k_type>0)
-	{
-	  rotated_node_pt->set_value(k_type-1, 0.0);
-	  unrotated_node_pt->set_value(k_type-1, 0.0); 
-	}
-      
-      // Set the current type to one
-      rotated_node_pt->set_value(k_type, value);
-      unrotated_node_pt->set_value(k_type, value);
-
-      // Now doc the solution
-      problem.doc_solution();
-    }
-  
-  // // Set pressure
-  // Parameters::P_mag=10.0;
+  // Set pressure
+  Parameters::P_mag=10.0;
  
-  // // Solve the system
-  // problem.newton_solve();
+  // Solve the system
+  problem.newton_solve();
  
-  // // Document the current solution
-  // problem.doc_solution();
+  // Document the current solution
+  problem.doc_solution();
  
 } //End of main

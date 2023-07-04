@@ -67,10 +67,10 @@ namespace Parameters
   double P_mag = 0.0;
 
   /// Magnitude of shear stress
-  double T_mag = 1.0;
+  double T_mag = 0.0;
  
   /// Element size
-  double Element_area=0.01;
+  double Element_area=0.1;
  
   /// Pressure depending on the position (x,y)
   void get_pressure(const Vector<double>& x, double& pressure)
@@ -82,10 +82,11 @@ namespace Parameters
   void get_in_plane_force(const Vector<double>& x, Vector<double>& tau)
   {
     tau[0]= T_mag;
-    tau[1]= 0.0; // T_mag;
+    tau[1]= T_mag;
   }
 
   
+  //-------- Boundary conditions -----------------------------------------------
   /// Helper function to specify boundary conditions (here all homogeneous)
   /// as a function of both coordinates (This is convenient for this problem;
   /// other interfaces that specify boundary conditions in terms of
@@ -93,16 +94,6 @@ namespace Parameters
   void get_null_fct(const Vector<double>& x, double& value)
   {
     value = 0.0;
-  }
- 
-  
-  /// Helper function to specify boundary conditions (here all homogeneous)
-  /// as a function of both coordinates (This is convenient for this problem;
-  /// other interfaces that specify boundary conditions in terms of
-  /// boundary coordinate exist).
-  void get_const_fct(const Vector<double>& x, double& value)
-  {
-    value = 0.1;
   }
  
 } // end of Parameters
@@ -468,7 +459,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
   //
   // hierher complete once Aidan has signed off the explanation above.
-  //
+  // [zdec] "This is all good." -- Aidan
   //
   //
   // Using the conventions introduced above, the following vectors identify
@@ -500,13 +491,19 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // |  w  | w_x | w_y | w_xx| w_xy| w_yy|
 
  
+  // **************************************************************************
+  // [zdec] This is slightly wrong -- marked with asterisks. Meld with 
+  // rotated_square.cc to see proposed changes 
+  // (note later changes are due to rotated dofs).
+  // **************************************************************************
+
   // Possible boundary conditions for out-of-plane displacements:
   // Given that the out-of-plane displacements feature in the fourth-order
   // biharmonic operator, we can apply boundary conditions on w and
   // dw/dn, where n is the coordinate direction normal to the (assumed to be
-  // axis aligned!) boundary. However if w and dw/dn are given along the entire
+  // axis aligned!) boundary. *** However if w and dw/dn are given along the entire
   // boundary (parametrised by the tangential coordinate, t) we also know what
-  // dw/dt and d^2w/dndt are. In the various cases below we identify physical
+  // dw/dt and d^2w/dndt are. *** In the various cases below we identify physical
   // scenarios of a pinned edge (w given, dw/dn left free); a vertically
   // sliding edge (w left free; dw/dn given) and fully clamped (w and dw/dn
   // given). Together with the two possible orientations of the axis aligned
@@ -603,16 +600,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 	  for(unsigned i=0; i<n_pinned_u_dofs; i++)
 	    {
 	      unsigned idof_to_be_pinned=pinned_u_dofs[b][i];
-	      // if(b==2 && idof_to_be_pinned==0)
-	      // 	{
-	      // 	  el_pt->fix_in_plane_displacement_dof(idof_to_be_pinned, b,
-	      // 					       Parameters::get_const_fct);
-	      // 	}
-	      // else
-		{
 		  el_pt->fix_in_plane_displacement_dof(idof_to_be_pinned, b,
 						       Parameters::get_null_fct);
-		}
 	    }
 	  // Pin out-of-plane dofs (enumerated as explained above) for all
 	  // nodes on boundary b. Here we're applying homogeneous BCs so
@@ -668,7 +657,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
 
  
   // Write the load magnitude and centrepoint displacements to trace file
-  Vector<double> w_centre(24,0.0);
+  Vector<double> w_centre(12,0.0);
 
   // hierher: Aidan: rename this function to
   // interpolated_foeppl_von_karman_values(s)
@@ -725,17 +714,6 @@ int main(int argc, char **argv)
 
   // Set pressure
   Parameters::P_mag=10.0;
- 
-  // Solve the system
-  problem.newton_solve();
- 
-  // Document the current solution
-  problem.doc_solution();
-
-
-  
-  // Set pressure
-  Parameters::P_mag=0.0;
  
   // Solve the system
   problem.newton_solve();

@@ -3,15 +3,18 @@
 circular_disc
 circular_sector
 clamped_square_inflation
-
+rotated_square
+axisym_displ_based_fvk
 
 # Executible outputs
 NEW_*/
 RESLT*/
 
 
-# Emacs undo tree
+# Emacs
 *~undo-tree~
+compile_commands.json
+\#*\#
 
 # http://www.gnu.org/software/automake
 
