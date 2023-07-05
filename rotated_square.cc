@@ -298,6 +298,7 @@ public:
   /// Overloaded version of the problem's access function to
   /// the mesh. Recasts the pointer to the base Mesh object to
   /// the actual mesh type.
+  // hierher
   TriangleMesh<ELEMENT>* mesh_pt()
   {
     return Bulk_mesh_pt;
@@ -439,7 +440,8 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   //=================================//
 
  
-  // Get the vertices from the parameters
+  // Get the vertices from the parameters 
+  // hierher rename Vertices[] to Vertex[]
   Vector<double>
     vertex0 = Parameters::Vertices[0],
     vertex1 = Parameters::Vertices[1],
@@ -523,6 +525,31 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   }
   // Set the boundary conditions
   apply_boundary_conditions();
+
+  // Find element/local coordinate within it, that contains the
+  // central point
+  Vector<double> origin(2,0.0);
+
+  // Create a MeshAsGeomObject from the Mesh:
+  MeshAsGeomObject mesh_as_geom_object(Bulk_mesh_pt);
+ 
+  // Make space for local coordinate in element pointed to by Central_element_pt
+  // that contains central point
+  Central_point_local_coord.resize(2);
+
+  // Find it!
+  mesh_as_geom_object.locate_zeta(origin,Central_element_geom_obj_pt,
+				  Central_point_local_coord);
+
+  // Did that work out?
+  if(Central_element_geom_obj_pt==0)
+    {
+      throw OomphLibError("couldn't find central element",
+			  OOMPH_CURRENT_FUNCTION,
+			  OOMPH_EXCEPTION_LOCATION);
+    }
+ 
+
  
 } // end of complete
 
@@ -653,16 +680,34 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //
   //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
   //
-  // hierher complete once Aidan has signed off the explanation above.
-  // [zdec] "This is all good." -- Aidan
+  // assigns boundary conditions for the out-of-plane displacements via
+  // the specification of
+  //
+  // idof   : the enumeration of the dof in the scheme listed above,
+  //          so idof can take values 0, 1. 2, 3, 4 or 5
+  // b      : the mesh boundary along which the boundary condition is
+  //          to be applied
+  // fct_pt : a function pointer to a global function with arguments
+  //          (const Vector<double> x, double& value) which computes
+  //          the value for the relevant out-of-plane displacement (or 
+  //          its derivative; depending on what the dof represents) as a
+  //          function of the coordinate, x, a 2D vector. 
+  //
+  // So, if the function fix_out_of_plane_displacement_dof(idof, b, fct_pt) is called 
+  // with idof=2 and b=3, say, the tangential-derivative of the out-of-plane displacement 
+  // is pinned for all the element's nodes (if any) that are located on mesh boundary 3. 
+  // The value of this derivative is set to whatever the function pointed to by fct_pt 
+  // computes when evaluated at the nodal coordinate. 
   //
   //
   // Using the conventions introduced above, the following vectors identify
   // the in-plane and out-of-plane degrees of freedom to be pinned for
   // various physically meaningful boundary conditions:
 
- 
-  // [zdec] NOTE THAT THE IN-PLANE DISPLACEMENTS ARENT ROTATED
+
+
+  // [zdec] NOTE THAT THE IN-PLANE DISPLACEMENTS ARENT ROTATED; 
+  // hierher but maybe we should (at least as a todo list item)!
   // In-plane dofs:
   //---------------
   // |  0  |  1  |
@@ -700,8 +745,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // given). The four possible combinations of boundary condition are:
   //   fully free    -- nothing given,  
   //   pinned edge   -- only w(t) given,
-  //   sliding clamp -- only dwdt(t) given,
-  //   fully clamped -- both w(t) and dwdt(t) given.
+  //   sliding clamp -- only dwdt(t) given, // hierher dwdn
+  //   fully clamped -- both w(t) and dwdt(t) given. // hierher dwdn
 
   // Case: The plate is pinned (w given, dw/dn left free) along a boundary.
   // We therefore have to pin (and assign values for) w, dw/dt and d^2w/dt^2
@@ -726,7 +771,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   Vector<Vector<unsigned>> pinned_w_dofs(4);
  
   // Pin both in-plane displacements everywhere
-  pinned_u_dofs[0] = pin_ux_and_uy_pinned_dof;
+  pinned_u_dofs[0] = pin_ux_and_uy_pinned_dof; // hierher. Maybe we should rotate these too?
   pinned_u_dofs[1] = pin_ux_and_uy_pinned_dof;
   pinned_u_dofs[2] = pin_ux_and_uy_pinned_dof;
   pinned_u_dofs[3] = pin_ux_and_uy_pinned_dof;
@@ -734,10 +779,10 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // Use pinned edge boundary conditions for the out-of-plane
   // displacements. Boundaries 0 and 2 are are constant y,
   // boundaries 1 and 3 are constant x:
-  pinned_w_dofs[0] = pinned_edge_yn_pinned_dof;
-  pinned_w_dofs[1] = pinned_edge_xn_pinned_dof;
-  pinned_w_dofs[2] = pinned_edge_yn_pinned_dof;
-  pinned_w_dofs[3] = pinned_edge_xn_pinned_dof;
+  pinned_w_dofs[0] = pinned_edge_pinned_dof;
+  pinned_w_dofs[1] = pinned_edge_pinned_dof;
+  pinned_w_dofs[2] = pinned_edge_pinned_dof;
+  pinned_w_dofs[3] = pinned_edge_pinned_dof;
 
  
   // Loop over all the boundaries in our bulk mesh

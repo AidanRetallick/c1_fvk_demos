@@ -70,7 +70,7 @@ namespace Parameters
   double T_mag = 0.0;
  
   /// Element size
-  double Element_area=0.1;
+  double Element_area=0.01;
  
   /// Pressure depending on the position (x,y)
   void get_pressure(const Vector<double>& x, double& pressure)
@@ -450,7 +450,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //
   // So, if the function fix_in_plane_displacement_dof(idof, b, fct_pt) is called with idof=1
   // and b=3, say, the y-in-plane displacement is pinned for all the element's
-  // nodes (if any) that are located on mesh boundary b. The value of the y-in-plane 
+  // nodes (if any) that are located on mesh boundary 3. The value of the y-in-plane 
   // displacement is set to whatever the function pointed to by fct_pt computes when
   // evaluated at the nodal coordinate. 
   //
@@ -458,8 +458,24 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //
   //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
   //
-  // hierher complete once Aidan has signed off the explanation above.
-  // [zdec] "This is all good." -- Aidan
+  // assigns boundary conditions for the out-of-plane displacements via
+  // the specification of
+  //
+  // idof   : the enumeration of the dof in the scheme listed above,
+  //          so idof can take values 0, 1. 2, 3, 4 or 5
+  // b      : the mesh boundary along which the boundary condition is
+  //          to be applied
+  // fct_pt : a function pointer to a global function with arguments
+  //          (const Vector<double> x, double& value) which computes
+  //          the value for the relevant out-of-plane displacement (or 
+  //          its derivative; depending on what the dof represents) as a
+  //          function of the coordinate, x, a 2D vector. 
+  //
+  // So, if the function fix_out_of_plane_displacement_dof(idof, b, fct_pt) is called 
+  //  with idof=2 and b=3, say, the y-derivative of the out-of-plane displacement 
+  // is pinned for all the element's nodes (if any) that are located on mesh boundary 3. 
+  // The value of this derivative is set to whatever the function pointed to by fct_pt 
+  // computes when evaluated at the nodal coordinate. 
   //
   //
   // Using the conventions introduced above, the following vectors identify
@@ -501,9 +517,9 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // Given that the out-of-plane displacements feature in the fourth-order
   // biharmonic operator, we can apply boundary conditions on w and
   // dw/dn, where n is the coordinate direction normal to the (assumed to be
-  // axis aligned!) boundary. *** However if w and dw/dn are given along the entire
+  // axis aligned!) boundary. However if w and dw/dn are given along the entire
   // boundary (parametrised by the tangential coordinate, t) we also know what
-  // dw/dt and d^2w/dndt are. *** In the various cases below we identify physical
+  // dw/dt and d^2w/dndt are. In the various cases below we identify physical
   // scenarios of a pinned edge (w given, dw/dn left free); a vertically
   // sliding edge (w left free; dw/dn given) and fully clamped (w and dw/dn
   // given). Together with the two possible orientations of the axis aligned
@@ -563,9 +579,9 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
  
   // Pin both in-plane displacements everywhere
   pinned_u_dofs[0] = pin_ux_and_uy_pinned_dof;
-  pinned_u_dofs[1] = {}; // pin_ux_and_uy_pinned_dof;
+  pinned_u_dofs[1] = {}; // pin_ux_and_uy_pinned_dof; // hierher Why has this been changed?
   pinned_u_dofs[2] = pin_ux_and_uy_pinned_dof;
-  pinned_u_dofs[3] = {}; // pin_ux_and_uy_pinned_dof;
+  pinned_u_dofs[3] = {}; // pin_ux_and_uy_pinned_dof; // hierher Why has this been changed?
 
   // Use pinned edge boundary conditions for the out-of-plane
   // displacements. Boundaries 0 and 2 are are constant y,
