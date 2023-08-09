@@ -309,6 +309,9 @@ namespace Parameters
   /// In-plane traction magnitude
   double T_mag = 0.00;
 
+  /// Order of polynomial boundary interpolation
+  unsigned Boundary_order = 3;
+  
   // hierher what are these objects? Shouldn't they be
   // used in the mesh generatino too; surely they encode the
   // same information.
@@ -980,7 +983,9 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     } // end checks
 
     // Upgrade it // hierher what is "3"?
-    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,5);
+    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,
+					  parametric_curve_pt,
+					  Parameters::Boundary_order);
   }
 }// end_upgrade_elements
 
@@ -1109,7 +1114,11 @@ int main(int argc, char **argv)
   // Element Area 
   double element_area=0.09;
   CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
- 
+
+  // Order of polynomial boundary interpolation
+  CommandLineArgs::specify_command_line_flag("--boundary_order",
+					     &Parameters::Boundary_order);
+  
   // Parse command line
   CommandLineArgs::parse_and_assign();
 
@@ -1131,37 +1140,37 @@ int main(int argc, char **argv)
   problem(element_area);
 
 
-  double dp_mag=0.000001;
-  double dt_mag=0.000001;
-  unsigned nstep=1000;
+  // double dp_mag=0.000001;
+  // double dt_mag=0.000001;
+  // unsigned nstep=1000;
 
 
-  // Which case are we doing
-  if (Parameters::Problem_case==Parameters::Clamped_validation)
-  {
-    nstep=1;
-    dp_mag=0.01;
-    dt_mag=0.000001;
-    Parameters::P_mag=0.01;
-    Parameters::T_mag=0.0;
-  }
-  // 
-  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
-  {
-    nstep=100;
-    dp_mag=0.0;
-    dt_mag=0.000001;
-    Parameters::P_mag=0.001;
-    Parameters::T_mag=0.0;
-  }
-  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
-  {
-    nstep=100;
-    dp_mag=0.0;
-    dt_mag=0.000001;
-    Parameters::P_mag=0.001;
-    Parameters::T_mag=0.0;
-  }
+  // // Which case are we doing
+  // if (Parameters::Problem_case==Parameters::Clamped_validation)
+  // {
+  //   nstep=1;
+  //   dp_mag=0.01;
+  //   dt_mag=0.000001;
+  //   Parameters::P_mag=0.01;
+  //   Parameters::T_mag=0.0;
+  // }
+  // // 
+  // else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+  // {
+  //   nstep=100;
+  //   dp_mag=0.0;
+  //   dt_mag=0.000001;
+  //   Parameters::P_mag=0.001;
+  //   Parameters::T_mag=0.0;
+  // }
+  // else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
+  // {
+  //   nstep=100;
+  //   dp_mag=0.0;
+  //   dt_mag=0.000001;
+  //   Parameters::P_mag=0.001;
+  //   Parameters::T_mag=0.0;
+  // }
 
  
   // Document
