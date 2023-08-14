@@ -186,9 +186,9 @@ namespace oomph
       //Set up memory for the shape/test functions
       Shape psi(n_node);
    
-      //Integers to store the local equation and unknown numbers
-      int local_eqn_real=0;
-      int local_eqn_imag=0; 
+      // //Integers to store the local equation and unknown numbers
+      // int local_eqn_real=0;
+      // int local_eqn_imag=0; 
    
       // Get shape/test fcts
       this->shape(S_point_force_and_torque,psi);
@@ -307,7 +307,10 @@ namespace Parameters
   double P_mag = 0.0;
  
   /// In-plane traction magnitude
-  double T_mag = 0.00;
+  double T_mag = 0.0;
+
+  /// Order of boundary interpolation
+  unsigned Boundary_order = 3;  
 
   // hierher what are these objects? Shouldn't they be
   // used in the mesh generatino too; surely they encode the
@@ -498,10 +501,13 @@ private:
   /// them to be curved elements
   void upgrade_edge_elements_to_curve(const unsigned &b);
 
+  // [zdec]
+public:  
   /// Loop over all edge elements and rotate the Hermite degrees of freedom
   /// to be in the directions of the two in-plane vectors specified in Parameters
   void rotate_edge_degrees_of_freedom();
-
+private:
+  
   /// Delete traction elements and wipe the surface mesh
   void delete_traction_elements(Mesh* const &surface_mesh_pt);
 
@@ -563,8 +569,8 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(const double& element_ar
   upgrade_edge_elements_to_curve(Outer_boundary0);
   upgrade_edge_elements_to_curve(Outer_boundary1);
 
-  // Rotate degrees of freedom
-  rotate_edge_degrees_of_freedom();
+  // // Rotate degrees of freedom
+  // rotate_edge_degrees_of_freedom();
 
   // Store number of bulk elements
   complete_problem_setup();
@@ -957,7 +963,9 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     } // end checks
 
     // Upgrade it // hierher what is "3"?
-    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,3);
+    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,
+					  parametric_curve_pt,
+					  Parameters::Boundary_order);
   }
 }// end_upgrade_elements
 
@@ -1023,7 +1031,6 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
 					     parametric_curve_pt[b]);
       }
     }
-    el_pt->rotated_boundary_helper_pt()->update_rotation_matrices(true);
   }
 }// end rotate_edge_degrees_of_freedom
 
@@ -1093,18 +1100,26 @@ int main(int argc, char **argv)
   CommandLineArgs::specify_command_line_flag("--use_clamped_bc");
 
   // Poisson Ratio
-  CommandLineArgs::specify_command_line_flag("--nu", &Parameters::Nu);
+  CommandLineArgs::specify_command_line_flag("--nu",
+					     &Parameters::Nu);
 
   // Applied Pressure
-  CommandLineArgs::specify_command_line_flag("--p", &Parameters::P_mag);
+  CommandLineArgs::specify_command_line_flag("--p",
+					     &Parameters::P_mag);
 
   // FvK prameter
-  CommandLineArgs::specify_command_line_flag("--eta", &Parameters::Eta);
+  CommandLineArgs::specify_command_line_flag("--eta",
+					     &Parameters::Eta);
 
   // Element Area 
   double element_area=0.09;
-  CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
- 
+  CommandLineArgs::specify_command_line_flag("--element_area",
+					     &element_area);
+
+  // Order of the boundary interpolation
+  CommandLineArgs::specify_command_line_flag("--boundary_order",
+					     &Parameters::Boundary_order);
+  
   // Parse command line
   CommandLineArgs::parse_and_assign();
 
@@ -1126,41 +1141,76 @@ int main(int argc, char **argv)
     problem(element_area);
 
 
-  double dp_mag=0.000001;
-  double dt_mag=0.000001;
-  unsigned nstep=1000;
+  // double dp_mag=0.000001;
+  // double dt_mag=0.000001;
+  // unsigned nstep=1000;
 
 
-  // Which case are we doing
-  if (Parameters::Problem_case==Parameters::Clamped_validation)
-  {
-    nstep=1;
-    dp_mag=0.0;
-    dt_mag=0.0;
-    Parameters::P_mag=0.0;
-    Parameters::T_mag=0.0;
-  }
-  // 
-  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
-  {
-    nstep=100;
-    dp_mag=0.0;
-    dt_mag=0.000001;
-    Parameters::P_mag=0.001;
-    Parameters::T_mag=0.0;
-  }
-  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
-  {
-    nstep=100;
-    dp_mag=0.0;
-    dt_mag=0.000001;
-    Parameters::P_mag=0.001;
-    Parameters::T_mag=0.0;
-  }
+  // // Which case are we doing
+  // if (Parameters::Problem_case==Parameters::Clamped_validation)
+  // {
+  //   nstep=1;
+  //   dp_mag=0.0;
+  //   dt_mag=0.0;
+  //   Parameters::P_mag=0.0;
+  //   Parameters::T_mag=0.0;
+  // }
+  // // 
+  // else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+  // {
+  //   nstep=100;
+  //   dp_mag=0.0;
+  //   dt_mag=0.000001;
+  //   Parameters::P_mag=0.001;
+  //   Parameters::T_mag=0.0;
+  // }
+  // else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
+  // {
+  //   nstep=100;
+  //   dp_mag=0.0;
+  //   dt_mag=0.000001;
+  //   Parameters::P_mag=0.001;
+  //   Parameters::T_mag=0.0;
+  // }
     
 
   // Document
   problem.doc_solution();
+
+  // // Loop over all dof types
+  // for(unsigned i=0; i<6; i++)
+  // {
+  //   // Set the boundary conditions
+  //   unsigned nbound = 2;
+  //   for(unsigned b=0;b<nbound;b++)
+  //   {
+  //     const unsigned nb_element = problem.mesh_pt()->nboundary_element(b);
+  //     for(unsigned e=0;e<nb_element;e++)
+  //     {
+  // 	// Get pointer to bulk element adjacent to b
+  // 	FoepplVonKarmanC1CurvableBellElement<4>* el_pt =
+  // 	dynamic_cast<FoepplVonKarmanC1CurvableBellElement<4>*>(problem.mesh_pt()->boundary_element_pt(b,e));
+	  
+  // 	// A true clamp, so we set everything except the second normal to zero
+  // 	for(unsigned idof=0; idof<6; ++idof)
+  // 	{
+  // 	  // Cannot set second normal derivative
+  // 	  if(idof==i)
+  // 	  {
+  // 	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_unit_fct);
+  // 	  }
+  // 	  else
+  // 	  {
+  // 	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
+  // 	  }
+  // 	}
+  //     }
+  //   }
+  //   // Document
+  //   problem.doc_solution();
+  // }
+
+  problem.rotate_edge_degrees_of_freedom();
 
   // Loop over all dof types
   for(unsigned i=0; i<6; i++)
@@ -1191,7 +1241,6 @@ int main(int argc, char **argv)
 	}
       }
     }
-
     // Document
     problem.doc_solution();
   }

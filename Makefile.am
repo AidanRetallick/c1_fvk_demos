@@ -64,5 +64,5 @@ circular_sector_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
 # Automake will replace the variable @includedir@ with the actual
 # include directory.
 
-AM_CPPFLAGS += -I@includedir@ -Wall -ggdb3 -Og
+AM_CPPFLAGS += -I@includedir@ -Wall -ggdb3 -O0
 #EXTRA_DIST = Circle1.1.ele Circle1.1.node Circle1.1.poly
