@@ -186,9 +186,9 @@ namespace oomph
       //Set up memory for the shape/test functions
       Shape psi(n_node);
    
-      // //Integers to store the local equation and unknown numbers
-      // int local_eqn_real=0;
-      // int local_eqn_imag=0; 
+      //Integers to store the local equation and unknown numbers
+      int local_eqn_real=0;
+      int local_eqn_imag=0; 
    
       // Get shape/test fcts
       this->shape(S_point_force_and_torque,psi);
@@ -287,11 +287,33 @@ namespace Parameters
   /// Which case are we doing
   unsigned Problem_case=Clamped_validation; // Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
  
-  // Ellipse half axis
-  double A = 1.0;
+  /// Upper ellipse x span
+  double A1 = 0.5;
 
-  // Other ellipse half axis
-  double B = 1.0;
+  /// Upper ellipse y span
+  double B1 = 1.5;
+  
+  /// Lower ellipse x span
+  double A2 = 0.6;
+
+  /// Lower ellipse y span
+  double B2 = 0.7;
+  
+  /// x-component of intersection (positive value)
+  double X_intersect = sqrt(A1*A1*A2*A2*(B1*B1-B2*B2)
+			    / (A2*A2*B1*B1 - A1*A1*B2*B2));
+  
+  /// y-component of boundary intersection
+  double Y_intersect = sqrt( B1*B1
+			     * ( 1.0 - X_intersect*X_intersect/(A1*A1) ) );
+
+  /// Theta of intersect 1
+  // (shift by -pi/2 as the ellipse uses the angle about positive y)
+  double Theta1 = atan2(Y_intersect/B1,X_intersect/A1) - Pi/2.0;
+
+  /// Theta of intersect 2
+  // (shift by -pi/2 as the ellipse uses the angle about positive y)
+  double Theta2 = atan2(Y_intersect/B2,X_intersect/A2) - Pi/2.0;
   
   /// Poisson ratio
   double Nu = 0.5;
@@ -304,29 +326,40 @@ namespace Parameters
   double Eta=2.39e6;
  
   /// Pressure magnitude
-  double P_mag = 0.0;
+  double P_mag = 0.00;
  
   /// In-plane traction magnitude
-  double T_mag = 0.0;
+  double T_mag = 0.00;
 
-  /// Order of boundary interpolation
-  unsigned Boundary_order = 3;  
 
-  // hierher what are these objects? Shouldn't they be
-  // used in the mesh generatino too; surely they encode the
-  // same information.
- 
-  /// Parametric curve for the upper half boundary
-  CurvilineEllipseTop parametric_curve_top(A,B);
+  //                       __
+  //                     -    -
+  //                   -        -   *Upper ellipse arc*
+  //                 /            \
+  //               /                \
+  //             /                    \
+  //           /                        \
+  //          /         ________         \
+  //         /       --         --        \
+  //       /       --              --       \
+  //      /      -                    -      \
+  //     /    /  *Lower ellipse arc*     \    \
+  //    /  /                                \  \
+  //   / /                                    \ \
+  //   X(Theta2)                                X(Theta1)
+  
+  /// Parametric curve for the upper elliptical boundary arc
+  CurvilineEllipseTop Upper_parametric_elliptical_curve(A1,B1,false);
 
-  /// Parametric curve for the lower half boundary
-  CurvilineEllipseBottom parametric_curve_bottom(A,B);
+  /// Parametric curve for the lower elliptical boundary arc
+  // (true->clockwise)
+  CurvilineEllipseTop Lower_parametric_elliptical_curve(A2,B2,true);
 
   /// Vector of parametric boundaries
-  Vector<CurvilineGeomObject*> parametric_curve_pt =
+  Vector<CurvilineGeomObject*> Parametric_curve_pt =
   {
-    &parametric_curve_top,
-    &parametric_curve_bottom
+    &Upper_parametric_elliptical_curve,
+    &Lower_parametric_elliptical_curve
   };
   
   
@@ -432,7 +465,7 @@ namespace Parameters
 //==start_of_problem_class============================================
 /// Problem definition
 //====================================================================
-using Parameters::parametric_curve_pt;
+using Parameters::Parametric_curve_pt;
 
 template<class ELEMENT>
 class UnstructuredFvKProblem : public virtual Problem
@@ -452,13 +485,8 @@ public:
     // Clean up memory
     delete Bulk_mesh_pt;
     delete Outer_boundary_pt;
-    delete Outer_boundary_ellipse_pt;
     delete Outer_curvilinear_boundary_pt[0];
     delete Outer_curvilinear_boundary_pt[1];
-    delete Inner_open_boundaries_pt[0];
-    delete Inner_open_boundaries_pt[1];
-    delete Boundary2_pt;
-    delete Boundary3_pt;
   };
 
   /// Update after solve (empty)
@@ -501,12 +529,9 @@ private:
   /// them to be curved elements
   void upgrade_edge_elements_to_curve(const unsigned &b);
 
-  // [zdec]
-public:  
   /// Loop over all edge elements and rotate the Hermite degrees of freedom
   /// to be in the directions of the two in-plane vectors specified in Parameters
   void rotate_edge_degrees_of_freedom();
-private:
 
   /// Delete traction elements and wipe the surface mesh
   void delete_traction_elements(Mesh* const &surface_mesh_pt);
@@ -518,9 +543,7 @@ private:
   enum
   {
     Outer_boundary0 = 0,
-    Outer_boundary1 = 1,
-    Inner_boundary0 = 2,
-    Inner_boundary1 = 3
+    Outer_boundary1 = 1
   };
 
   /// Target element area
@@ -532,23 +555,14 @@ private:
   /// Doc info object for labeling output
   DocInfo Doc_info;
   
-  /// Outer boundary Geom Object
-  Ellipse* Outer_boundary_ellipse_pt;
+  // /// Outer boundary Geom Object
+  // Ellipse* Outer_boundary_ellipse_pt;
  
   /// The outer curves
   Vector<TriangleMeshCurveSection*> Outer_curvilinear_boundary_pt;
-
-  /// The Internal curves
-  Vector<TriangleMeshOpenCurve *> Inner_open_boundaries_pt;
  
   /// The close outer boundary
   TriangleMeshClosedCurve* Outer_boundary_pt;
-
-  /// The first of the internal boundaries
-  TriangleMeshPolyLine* Boundary2_pt;
-
-  /// The second of the internal boundaries
-  TriangleMeshPolyLine* Boundary3_pt;
  
 }; // end_of_problem_class
 
@@ -600,97 +614,65 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 {
   Vector<double> zeta(1);
   Vector<double> posn(2);
- 
+  
   //Outer boundary
   //--------------
- 
-  double A = Parameters::A;
-  double B = Parameters::B;
-  Outer_boundary_ellipse_pt = new Ellipse(A, B);
- 
+  double theta1=Parameters::Theta1;
+  double theta2=Parameters::Theta2;
+  
+  // [zdec] debug
+  oomph_info << theta1 << " " << theta2 << std::endl;
+  
   //First bit
-  double zeta_start = 0.0;
-  double zeta_end = MathematicalConstants::Pi;
-  unsigned nsegment = (int)(MathematicalConstants::Pi/sqrt(Element_area));
- 
+  double zeta_start = theta1;
+  double zeta_end = -theta1;
+  unsigned nsegment = (int)(2.0*(theta2-theta1)/sqrt(Element_area))+2;
+  
   Outer_curvilinear_boundary_pt.resize(2);
   Outer_curvilinear_boundary_pt[0] =
-    new TriangleMeshCurviLine(Outer_boundary_ellipse_pt, zeta_start,
+    new TriangleMeshCurviLine(Parameters::Parametric_curve_pt[0], zeta_start,
 			      zeta_end, nsegment, Outer_boundary0);
- 
-  //Second bit
-  zeta_start = MathematicalConstants::Pi;
-  zeta_end = 2.0*MathematicalConstants::Pi;
-  nsegment = (int)(MathematicalConstants::Pi/sqrt(Element_area));
+  
+  //Second bit (Even though we go from 2->1, the parametrisation is flipped)
+  zeta_start = theta2;
+  zeta_end = -theta2;
   Outer_curvilinear_boundary_pt[1] =
-    new TriangleMeshCurviLine(Outer_boundary_ellipse_pt, zeta_start,
+    new TriangleMeshCurviLine(Parameters::Parametric_curve_pt[1], zeta_start,
 			      zeta_end, nsegment, Outer_boundary1);
-
+  
   // Combine
   Outer_boundary_pt =
     new TriangleMeshClosedCurve(Outer_curvilinear_boundary_pt);
- 
-  // Internal open boundaries
-  //-------------------------
-  // Total number of open curves in the domain
-  unsigned n_open_curves = 2;
-  // We want internal open curves
-  Inner_open_boundaries_pt.resize(n_open_curves);
- 
-  // Internal bit - this means we can have a boundary which is just the centre
-  // We start by creating the internal boundaries
 
-  // Open curve 1
-  Vector<Vector<double> > vertices(2,Vector<double>(2,0.0));
-  vertices[0][0] =-0.5;
-  vertices[0][1] = 0.0;
-
-  vertices[1][0] = 0.5;
-  vertices[1][1] = 0.0;
-  unsigned boundary_id = Inner_boundary0;
-
-  Boundary2_pt =
-    new TriangleMeshPolyLine(vertices, boundary_id);
-
-  // Open Curve 2
-  vertices[0][0] = 0.0;
-  vertices[0][1] =-0.5;
-
-  vertices[1][0] = 0.0;
-  vertices[1][1] = 0.5;
-  boundary_id = Inner_boundary1;
-
-  Boundary3_pt =
-    new TriangleMeshPolyLine(vertices, boundary_id);
-
-  // Each internal open curve is defined by a vector of
-  // TriangleMeshCurveSections
-  Vector<TriangleMeshCurveSection *> internal_curve_section1_pt(1);
-  internal_curve_section1_pt[0] = Boundary2_pt;
-
-  Vector<TriangleMeshCurveSection *> internal_curve_section2_pt(1);
-  internal_curve_section2_pt[0] = Boundary3_pt;
-
-  // The open curve that defines this boundary
-  Inner_open_boundaries_pt[0] =
-    new TriangleMeshOpenCurve(internal_curve_section1_pt);
-
-  Inner_open_boundaries_pt[1] =
-    new TriangleMeshOpenCurve(internal_curve_section2_pt);
-
-
+  // [zdec] debug: output mesh boundary
+  ofstream mesh_debug;
+  mesh_debug.open("boundary_file.dat");
+  Outer_boundary_pt->output(mesh_debug, 200);
+  mesh_debug.close();
+  
   //Create mesh parameters object
   TriangleMeshParameters mesh_parameters(Outer_boundary_pt);
 
   // Element area
   mesh_parameters.element_area() = Element_area;
- 
-  // Specify the internal open boundaries
-  mesh_parameters.internal_open_curves_pt() = Inner_open_boundaries_pt;
- 
+  
   // Build an assign bulk mesh
   Bulk_mesh_pt=new TriangleMesh<ELEMENT>(mesh_parameters);
- 
+
+  // Reset the non-vertex node positions
+  for(unsigned e=0; e<Bulk_mesh_pt->nelement(); e++)
+  {
+    // [zdec] debug
+    oomph_info << "Repairing for element " << e << std::endl;
+    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
+    el_pt->repair_lagrange_node_positions();
+  }
+  
+  // Split elements that have two boundary edges
+  TimeStepper* time_stepper_pt = Bulk_mesh_pt->Time_stepper_pt;
+  Bulk_mesh_pt->
+    template split_elements_with_multiple_boundary_edges<ELEMENT>(time_stepper_pt);
+    
   //Add submesh to problem
   add_sub_mesh(Bulk_mesh_pt);
   
@@ -784,11 +766,11 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   // Complete the build of all elements so they are fully functional
   unsigned n_element = Bulk_mesh_pt->nelement();
   for(unsigned e=0;e<n_element;e++)
-  {
+  {   
     // Upcast from GeneralisedElement to the present element
     ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
-
-    //Set the pressure function pointers and the physical constants
+    
+    // Set the pressure function pointers and the physical constants
     el_pt->pressure_fct_pt() = &Parameters::get_pressure;
     el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
 
@@ -840,7 +822,6 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   {
     pin_all_displacements_and_rotation_at_centre_node();
   }
-
  
 } // end set bc
 
@@ -867,6 +848,12 @@ void UnstructuredFvKProblem<ELEMENT >::
 upgrade_edge_elements_to_curve(const unsigned &ibound)
 {
 
+  // [zdec] debug
+  ofstream debug_stream;
+  debug_stream.open("mesh_debug.dat");
+  Bulk_mesh_pt->output(debug_stream);
+  debug_stream.close();
+  
   // Parametric curve describing the boundary
   // hierher code share with thing that defines the
   // boundaries of the mesh!
@@ -874,11 +861,11 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
   switch (ibound)
   {
   case 0:
-    parametric_curve_pt = &Parameters::parametric_curve_top;
+    parametric_curve_pt = &Parameters::Upper_parametric_elliptical_curve;
     break;
    
   case 1:
-    parametric_curve_pt = &Parameters::parametric_curve_bottom;
+    parametric_curve_pt = &Parameters::Lower_parametric_elliptical_curve;
     break;
    
   default:
@@ -887,8 +874,8 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 			OOMPH_EXCEPTION_LOCATION);
     break;
   } // end parametric curve switch
-
- 
+  
+  
   // Loop over the bulk elements adjacent to boundary ibound
   const unsigned n_els=Bulk_mesh_pt->nboundary_element(ibound);
   for(unsigned e=0; e<n_els; e++)
@@ -896,7 +883,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     // Get pointer to bulk element adjacent to b
     ELEMENT* bulk_el_pt = dynamic_cast<ELEMENT*>(
       Bulk_mesh_pt->boundary_element_pt(ibound,e));
-
+ 
     // hierher what is that? why "My"?
     // Initialise enum for the curved edge
     MyC1CurvedElements::Edge edge(MyC1CurvedElements::none);
@@ -910,7 +897,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     // hierher what does this comment mean?
     // Fill in vertices' positions (this step should be moved inside the curveable
     // Bell element)
-    Vector<Vector<double> > xn(nnode,Vector<double>(2,0.0));
+     Vector<Vector<double> > xn(nnode,Vector<double>(2,0.0));
     for(unsigned n=0;n<nnode;++n)
     {
       Node* nod_pt = bulk_el_pt->node_pt(n);
@@ -918,8 +905,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
       xn[n][1]=nod_pt->x(1);
      
       // Check if it is on the outer boundaries
-      if(!(nod_pt->is_on_boundary(Outer_boundary0) ||
-	   nod_pt->is_on_boundary(Outer_boundary1)))
+      if(!(nod_pt->is_on_boundary(ibound)))
       {
 	index_of_interior_node = n;
 	++nnode_on_neither_boundary;
@@ -949,7 +935,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     else if (nnode_on_neither_boundary > 1)
     {
       throw OomphLibError(
-	"Multiple interior nodes. Only one node per CurvedElement can be interior.",
+ 	"Multiple interior nodes. Only one node per CurvedElement can be interior.",
 	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
     }
 
@@ -962,10 +948,8 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 	OOMPH_EXCEPTION_LOCATION);
     } // end checks
 
-    // Upgrade it // hierher what is "3"?
-    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,
-					  parametric_curve_pt,
-					  Parameters::Boundary_order);
+    // Upgrade it
+    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,5);
   }
 }// end_upgrade_elements
 
@@ -1013,7 +997,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
 	if (el_pt->node_pt(n)->is_on_boundary(b))
 	{
 	  boundary_node.push_back(n);
-	  double coord = parametric_curve_pt[b]
+	  double coord = Parametric_curve_pt[b]
 	    ->get_zeta(el_pt->node_pt(n)->position());
 	  boundary_coordinate_of_node.push_back(coord);
 	}
@@ -1028,7 +1012,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
 	  rotated_boundary_helper_pt()->
 	  add_nodal_boundary_parametrisation(boundary_node,
 					     boundary_coordinate_of_node,
-					     parametric_curve_pt[b]);
+					     Parametric_curve_pt[b]);
       }
     }
   }
@@ -1058,23 +1042,23 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   some_file.close();
  
 
-  // Find the solution at r=0
-  // ----------------------
+  // // Find the solution at r=0
+  // // ----------------------
 
-  // hierher precompute
-  MeshAsGeomObject Mesh_as_geom_obj(Bulk_mesh_pt);
-  Vector<double> s(2);
-  GeomObject* geom_obj_pt=0;
-  Vector<double> r(2,0.0);
-  Mesh_as_geom_obj.locate_zeta(r,geom_obj_pt,s);
+  // // hierher precompute
+  // MeshAsGeomObject Mesh_as_geom_obj(Bulk_mesh_pt);
+  // Vector<double> s(2);
+  // GeomObject* geom_obj_pt=0;
+  // Vector<double> r(2,0.0);
+  // Mesh_as_geom_obj.locate_zeta(r,geom_obj_pt,s);
 
-  // Compute the interpolated displacement vector
-  Vector<double> u_0(12,0.0);
-  u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_u_foeppl_von_karman(s);
+  // // Compute the interpolated displacement vector
+  // Vector<double> u_0(12,0.0);
+  // u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_u_foeppl_von_karman(s);
  
-  oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[0] << std::endl;
+  // oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[0] << std::endl;
  
-  Trace_file << Parameters::P_mag << " " << u_0[0] << '\n';
+  // Trace_file << Parameters::P_mag << " " << u_0[0] << '\n';
 
   // Increment the doc_info number
   Doc_info.number()++;
@@ -1100,25 +1084,17 @@ int main(int argc, char **argv)
   CommandLineArgs::specify_command_line_flag("--use_clamped_bc");
 
   // Poisson Ratio
-  CommandLineArgs::specify_command_line_flag("--nu",
-					     &Parameters::Nu);
+  CommandLineArgs::specify_command_line_flag("--nu", &Parameters::Nu);
 
   // Applied Pressure
-  CommandLineArgs::specify_command_line_flag("--p",
-					     &Parameters::P_mag);
+  CommandLineArgs::specify_command_line_flag("--p", &Parameters::P_mag);
 
   // FvK prameter
-  CommandLineArgs::specify_command_line_flag("--eta",
-					     &Parameters::Eta);
+  CommandLineArgs::specify_command_line_flag("--eta", &Parameters::Eta);
 
   // Element Area 
-  double element_area=0.09;
-  CommandLineArgs::specify_command_line_flag("--element_area",
-					     &element_area);
-
-  // Order of the boundary interpolation
-  CommandLineArgs::specify_command_line_flag("--boundary_order",
-					     &Parameters::Boundary_order);
+  double element_area=0.05;
+  CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
  
   // Parse command line
   CommandLineArgs::parse_and_assign();
@@ -1141,37 +1117,37 @@ int main(int argc, char **argv)
     problem(element_area);
 
 
-  // double dp_mag=0.000001;
-  // double dt_mag=0.000001;
-  // unsigned nstep=1000;
+  double dp_mag=0.000001;
+  double dt_mag=0.000001;
+  unsigned nstep=1000;
 
 
-  // // Which case are we doing
-  // if (Parameters::Problem_case==Parameters::Clamped_validation)
-  // {
-  //   nstep=1;
-  //   dp_mag=0.0;
-  //   dt_mag=0.0;
-  //   Parameters::P_mag=0.0;
-  //   Parameters::T_mag=0.0;
-  // }
-  // // 
-  // else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
-  // {
-  //   nstep=100;
-  //   dp_mag=0.0;
-  //   dt_mag=0.000001;
-  //   Parameters::P_mag=0.001;
-  //   Parameters::T_mag=0.0;
-  // }
-  // else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
-  // {
-  //   nstep=100;
-  //   dp_mag=0.0;
-  //   dt_mag=0.000001;
-  //   Parameters::P_mag=0.001;
-  //   Parameters::T_mag=0.0;
-  // }
+  // Which case are we doing
+  if (Parameters::Problem_case==Parameters::Clamped_validation)
+  {
+    nstep=1;
+    dp_mag=0.0;
+    dt_mag=0.0;
+    Parameters::P_mag=0.0;
+    Parameters::T_mag=0.0;
+  }
+  // 
+  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+  {
+    nstep=100;
+    dp_mag=0.0;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.001;
+    Parameters::T_mag=0.0;
+  }
+  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
+  {
+    nstep=100;
+    dp_mag=0.0;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.001;
+    Parameters::T_mag=0.0;
+  }
     
 
   // Document

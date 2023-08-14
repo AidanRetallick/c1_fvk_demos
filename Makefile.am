@@ -7,6 +7,7 @@ noinst_PROGRAMS = clamped_square_inflation \
 		  rotated_square \
 		  circular_disc \
 		  circular_sector \
+		  star_trek \
                   axisym_displ_based_fvk
 
 #----------------------------------------------------------------------
@@ -29,6 +30,8 @@ circular_disc_SOURCES = \
  circular_disc.cc
 circular_sector_SOURCES = \
  circular_sector.cc
+star_trek_SOURCES = \
+ star_trek.cc
 #---------------------------------------------------------------------------
 
 clamped_square_inflation_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
@@ -41,6 +44,9 @@ circular_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 circular_sector_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+star_trek_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 # Local sources that Jack's own code depends on: This code also uses
