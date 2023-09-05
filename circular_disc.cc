@@ -278,7 +278,8 @@ namespace Parameters
 
 
   // Enumeration of cases
-  enum{
+  enum
+  {
     Clamped_validation,
     Axisymmetric_shear_buckling,
     Nonaxisymmetric_shear_buckling

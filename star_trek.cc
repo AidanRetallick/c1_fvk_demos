@@ -37,6 +37,7 @@
 
 // The mesh
 #include "meshes/triangle_mesh.h"
+#include "src/generic/elements.h"
 
 using namespace std;
 using namespace oomph;
@@ -96,11 +97,75 @@ using MathematicalConstants::Pi;
 
 namespace oomph
 {
+  //========= start_of_duplicate_node_constraint_element ==================
+  /// Non-geometric element used to constrain dofs between duplicated
+  /// vertices where the Hemite data at each node is different but must
+  /// be compatible.
+  //=======================================================================
+  class ConstrainDupeHermiteFvKNodeElement : public virtual GeneralisedElement
+  {
+    
+  public:
+    /// Construcor. Needs the two node pointers so that we can retrieve the
+    /// boundary data at solve time
+    ConstrainDupeHermiteFvKNodeElement(Node* left_node_pt,
+				       Node* right_node_pt)
+      : Left_node_pt(left_node_pt),
+	Right_node_pt(right_node_pt)
+    {
+      // Must assign nodes (add them as external data)
+      // and create Lagrange multiplier data
+    }
 
+    /// Destructor
+    ~ConstrainDupeHermiteFvKNodeElement()
+    {
+      // Must remove Lagrange multiplier data?
+    }
 
-  // hierher
-  typedef FoepplVonKarmanC1CurvableBellElement<4> NON_WRAPPED_ELEMENT;
- 
+    /// Add the contribution to the residuals from the Lagrange multiplier
+    /// constraining equations
+    void fill_in_contribution_to_residuals(Vector<double> &residuals)
+    {
+      fill_in_generic_residual_contribution_foeppl_von_karman(
+	residuals,
+	GeneralisedElement::Dummy_matrix,
+	0);
+    }
+
+    /// Add the contribution to the Jacobian from the Lagrange multiplier
+    /// constraining equations
+    void fill_in_contribution_to_jacobian(Vector<double> &residuals,
+					 DenseMatrix<double> &jacobian)
+    {
+      fill_in_generic_residual_contribution_foeppl_von_karman(
+	residuals,
+	jacobian,
+	1);
+    }
+    
+  private:
+    /// Add the contribution to the residuals (and jacobain if flag is 1) from
+    /// the Lagrange multiplier constraining equations
+    void fill_in_generic_residual_contribution_foeppl_von_karman(
+      Vector<double> &residuals,
+      DenseMatrix<double> &jacobian,
+      const unsigned &flag)
+    {
+      // Calculate Jacobian and Hessian of coordinate transform between
+      // each boundary coordinate
+
+      // Add the residual contribution
+
+      // If flag, then add the jacobian contribution
+    }
+    
+    /// Pointer to the left node (before the vertex when anticlockwise)
+    Node* Left_node_pt;
+    
+    /// Pointer to the left node (after the vertex when anticlockwise)
+    Node* Right_node_pt;
+  };
 
   //========= start_of_point_force_and_torque_wrapper======================
   /// Class to impose point force and torque to (wrapped) Fvk element
@@ -139,7 +204,7 @@ namespace oomph
 	GeneralisedElement::Dummy_matrix,
 	0);
    
-      //fill_in_contribution_to_residuals(residuals);
+      // fill_in_contribution_to_residuals(residuals);
 
       // Add point force_and_torque contribution
       fill_in_point_force_and_torque_contribution_to_residuals(residuals);
@@ -187,8 +252,8 @@ namespace oomph
       Shape psi(n_node);
    
       //Integers to store the local equation and unknown numbers
-      int local_eqn_real=0;
-      int local_eqn_imag=0; 
+      // int local_eqn_real=0;
+      // int local_eqn_imag=0; 
    
       // Get shape/test fcts
       this->shape(S_point_force_and_torque,psi);
@@ -275,17 +340,15 @@ namespace oomph
 namespace Parameters
 {
 
-
-
-  // Enumeration of cases
-  enum{
-    Clamped_validation,
-    Axisymmetric_shear_buckling,
-    Nonaxisymmetric_shear_buckling
-  };
+  // // Enumeration of cases
+  // enum{
+  //   Clamped_validation,
+  //   Axisymmetric_shear_buckling,
+  //   Nonaxisymmetric_shear_buckling
+  // };
 
   /// Which case are we doing
-  unsigned Problem_case=Clamped_validation; // Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
+  //  unsigned Problem_case = ; // Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
  
   /// Upper ellipse x span
   double A1 = 0.5;
@@ -298,7 +361,34 @@ namespace Parameters
 
   /// Lower ellipse y span
   double B2 = 0.7;
+
+  /// Char array containing the condition on each boundary. Character array
+  /// index corresponds to boundary enumeration and the entry to the contition
+  /// type: // [zdec] use this at some point
+  ///   - 'c' for clamped
+  ///   - 'p' for pinned
+  ///   - 's' for sliding
+  ///   - 'f' for free
+  char Boundary_conditions[3] = "cc";  
   
+  /// Poisson ratio
+  double Nu = 0.5;
+  
+  /// FvK parameter
+  double Eta = 120.0e3;
+ 
+  /// Pressure magnitude
+  double P_mag = 0.0;
+ 
+  /// In-plane traction magnitude
+  double T_mag = 0.0;
+
+  /// Order of the polynomial interpolation of the boundary
+  unsigned Boundary_order = 3;
+  
+  //----------------------------------------------------------------------------
+  // [zdec] DEPENDENT VARIABLES -- need some sort of update hook
+
   /// x-component of intersection (positive value)
   double X_intersect = sqrt(A1*A1*A2*A2*(B1*B1-B2*B2)
 			    / (A2*A2*B1*B1 - A1*A1*B2*B2));
@@ -315,23 +405,8 @@ namespace Parameters
   // (shift by -pi/2 as the ellipse uses the angle about positive y)
   double Theta2 = atan2(Y_intersect/B2,X_intersect/A2) - Pi/2.0;
   
-  /// Poisson ratio
-  double Nu = 0.5;
 
-  // /// Membrane coupling coefficient (this should really be computed
-  // /// as a dependent parameter...)
-  // double Eta = 12.0*(1.0-Nu*Nu)/(Thickness*Thickness);
-
-  // FvK parameter
-  double Eta=2.39e6;
- 
-  /// Pressure magnitude
-  double P_mag = 0.00;
- 
-  /// In-plane traction magnitude
-  double T_mag = 0.00;
-
-
+  // Boundary info
   //                       __
   //                     -    -
   //                   -        -   *Upper ellipse arc*
@@ -349,16 +424,17 @@ namespace Parameters
   //   X(Theta2)                                X(Theta1)
   
   /// Parametric curve for the upper elliptical boundary arc
+  // (true->anticlockwise parametrisation)
   CurvilineEllipseTop Upper_parametric_elliptical_curve(A1,B1,false);
 
   /// Parametric curve for the lower elliptical boundary arc
-  // (true->clockwise)
+  // (true->clockwise parametrisation)
   CurvilineEllipseTop Lower_parametric_elliptical_curve(A2,B2,true);
 
   /// Vector of parametric boundaries
   Vector<CurvilineGeomObject*> Parametric_curve_pt =
   {
-    &Upper_parametric_elliptical_curve,
+     &Upper_parametric_elliptical_curve,
     &Lower_parametric_elliptical_curve
   };
   
@@ -367,27 +443,7 @@ namespace Parameters
   /// Pressure depending on the position (x,y)
   void get_pressure(const Vector<double>& x, double& pressure)
   {
-    // Constant pressure for validation case
-    if (Parameters::Problem_case==Parameters::Clamped_validation)
-    {
-      pressure = P_mag;
-    }
-    // Parabolic pressure distribution with zero mean
-    else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
-    {
-      pressure = P_mag*(0.25-x[0]*x[0]-x[1]*x[1]);
-    }
-    // Parabolic pressure distribution with zero mean
-    else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
-    {
-      pressure = P_mag*(0.25-x[0]*x[0]-x[1]*x[1]);
-    }
-    else
-    {
-      throw OomphLibError("Unexpected problem setup",
-			  OOMPH_CURRENT_FUNCTION,
-			  OOMPH_EXCEPTION_LOCATION);
-    }
+    pressure = P_mag;
   }
 
 
@@ -395,37 +451,8 @@ namespace Parameters
   /// In plane forcing (shear stress) depending on the position (x,y)
   void get_in_plane_force(const Vector<double>& x, Vector<double>& tau)
   {
-
-    // Zero shear stress for validation case
-    if (Parameters::Problem_case==Parameters::Clamped_validation)
-    {
-      tau[0]=0.0;
-      tau[1]=0.0;
-    }
-    // Self balancing purely radially outward shear stress
-    else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
-    {
-      double phi=atan2(x[1],x[0]);
-      double r_squared=x[0]*x[0]+x[1]*x[1];
-      tau[0]=T_mag*r_squared*cos(phi);
-      tau[1]=T_mag*r_squared*sin(phi);
-    }
-    // Self-balancing y shear stress over disk:
-    else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
-    {
-      //   tau_y := 1/4 - y^2;
-      //
-      //   resultant:=int(int(subs(y = r*sin(phi), tau_y)*r, phi = 0 .. 2*Pi), r = 0 .. 1);
-      tau[0] = 0.0;
-      tau[1] = T_mag*(0.25-x[1]*x[1]);
-    }
-    else
-    {
-      throw OomphLibError("Unexpected problem setup",
-			  OOMPH_CURRENT_FUNCTION,
-			  OOMPH_EXCEPTION_LOCATION);
-    }
-
+    tau[0] = 0.0;
+    tau[1] = 0.0;
   }
 
 
@@ -509,9 +536,12 @@ public:
 
 private:
 
-  /// Pin all displacements and rotation (dofs 0-4) at the centre
-  void pin_all_displacements_and_rotation_at_centre_node();
- 
+  // [zdec] this is not necessarily inside the domain for this geometry, needs
+  // fixing
+  //
+  // /// Pin all displacements and rotation (dofs 0-4) at the centre
+  // void pin_all_displacements_and_rotation_at_centre_node();
+
   /// Setup and build the mesh
   void build_mesh();
 
@@ -522,12 +552,37 @@ private:
   /// and complete the build of  all elements
   void complete_problem_setup();
 
-  /// Trace file to document norm of solution
-  ofstream Trace_file;
-
   /// Loop over all curved edges, then loop over elements and upgrade
   /// them to be curved elements
   void upgrade_edge_elements_to_curve(const unsigned &b);
+
+  /// Duplicate nodes at corners in order to properly apply boundary
+  /// conditions from each edge. Also adds (8) Lagrange multiplier dofs to the
+  /// problem in order to constrain continuous interpolation here across its (8)
+  /// vertex dofs. (Note "corner" here refers to the meeting point of any two
+  /// sub-boundaries in the closed external boundary)
+  void duplicate_corner_nodes();
+
+  /// Lookup scheme for duplicated nodes -- left meaning before the vertex when
+  /// traversing the boundary in an anticlockwise manner
+  Vector<Node*> Left_duplicated_node_pt;
+
+  /// Lookup scheme for duplicated nodes -- right meaning after the vertex when
+  /// traversing the boundary in an anticlockwise manner
+  Vector<Node*> Right_duplicated_node_pt;
+  
+  /// Vector of pointers to the lagrange data associated with each pair of
+  /// duplicated nodes one Lagrange multiplier per dof type resulting in six.
+  /// If the first node uses coordinates (s_1,s_2) and the second uses
+  /// coordinates (t_1, t_2) then we have one equation for displacement:
+  ///     0 = L_1 * (w_1-w_2)
+  /// two equations constraining gradient:
+  ///     0 = L_{1+\alpha} * (dw_1/ds_\alpha - J_{\alpha\beta} dw_2/dt_\beta)
+  /// and three equations constraining curvature (beta>=alpha):
+  ///     0 = L_{2+\alpha+\beta} * (d^2w_1/ds_\alpha ds_\beta
+  ///            - J_{\alpha\gamma} * J_{\beta\delta} * d^2w_2/dt_\gamma dt_\delta
+  ///            - H_{\gamma\alpha\beta} * dw_2/dt_gamma)
+  Vector<Data*> Lagrange_multiplier_pt;
 
   /// Loop over all edge elements and rotate the Hermite degrees of freedom
   /// to be in the directions of the two in-plane vectors specified in Parameters
@@ -535,7 +590,10 @@ private:
 
   /// Delete traction elements and wipe the surface mesh
   void delete_traction_elements(Mesh* const &surface_mesh_pt);
-
+  
+  /// Trace file to document norm of solution
+  ofstream Trace_file;
+  
   /// Pointer to "bulk" mesh
   TriangleMesh<ELEMENT>* Bulk_mesh_pt;
 
@@ -583,6 +641,9 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(const double& element_ar
   upgrade_edge_elements_to_curve(Outer_boundary0);
   upgrade_edge_elements_to_curve(Outer_boundary1);
 
+  // Add extra nodes at boundaries and constrain the dofs there.
+  duplicate_corner_nodes();
+  
   // Rotate degrees of freedom
   rotate_edge_degrees_of_freedom();
 
@@ -632,7 +693,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   Outer_curvilinear_boundary_pt[0] =
     new TriangleMeshCurviLine(Parameters::Parametric_curve_pt[0], zeta_start,
 			      zeta_end, nsegment, Outer_boundary0);
-  
+
   //Second bit (Even though we go from 2->1, the parametrisation is flipped)
   zeta_start = theta2;
   zeta_end = -theta2;
@@ -685,70 +746,70 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 
 
 
-//==start_of_pin_all_displacements_and_rotation_at_centre_node======================
-/// pin all displacements and rotations in the centre
-//==============================================================================
-template<class ELEMENT>
-void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_centre_node()
-{
+// //==start_of_pin_all_displacements_and_rotation_at_centre_node======================
+// /// pin all displacements and rotations in the centre
+// //==============================================================================
+// template<class ELEMENT>
+// void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_centre_node()
+// {
 
 
-  // Choose non-centre node on which we'll supress
-  // the rigid body rotation around the z axis.
-  double max_x_potentially_pinned_node=-DBL_MAX;
-  Node* pinned_rotation_node_pt=0;
+//   // Choose non-centre node on which we'll supress
+//   // the rigid body rotation around the z axis.
+//   double max_x_potentially_pinned_node=-DBL_MAX;
+//   Node* pinned_rotation_node_pt=0;
   
-  // Pin the node that is at the centre in the domain
-  unsigned num_int_nod=Bulk_mesh_pt->nboundary_node(2);
-  for (unsigned inod=0;inod<num_int_nod;inod++)
-  {
-    // Get node point
-    Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(2,inod);
+//   // Pin the node that is at the centre in the domain
+//   unsigned num_int_nod=Bulk_mesh_pt->nboundary_node(2);
+//   for (unsigned inod=0;inod<num_int_nod;inod++)
+//   {
+//     // Get node point
+//     Node* nod_pt=Bulk_mesh_pt->boundary_node_pt(2,inod);
 
-    // Check which coordinate increases along this boundary
-    // oomph_info << "node: "
-    //            << nod_pt->x(0) << " "
-    //            << nod_pt->x(1) << " "
-    //            << std::endl;
+//     // Check which coordinate increases along this boundary
+//     // oomph_info << "node: "
+//     //            << nod_pt->x(0) << " "
+//     //            << nod_pt->x(1) << " "
+//     //            << std::endl;
 
-    // Find the node with the largest x coordinate
-    if (fabs(nod_pt->x(0))>max_x_potentially_pinned_node)
-    {
-      max_x_potentially_pinned_node=fabs(nod_pt->x(0));
-      pinned_rotation_node_pt=nod_pt;
-    }
+//     // Find the node with the largest x coordinate
+//     if (fabs(nod_pt->x(0))>max_x_potentially_pinned_node)
+//     {
+//       max_x_potentially_pinned_node=fabs(nod_pt->x(0));
+//       pinned_rotation_node_pt=nod_pt;
+//     }
    
         
-    // If the node is on the other internal boundary too
-    if( nod_pt->is_on_boundary(3))
-    {
-      // Pin it! It's the centre of the domain!
-      // In-plane dofs are always 0 and 1
-      // Out of plane displacement is 2, x and y derivatives are 3 and 4.
-      nod_pt->pin(0);
-      nod_pt->set_value(0,0.0);
-      nod_pt->pin(1);
-      nod_pt->set_value(1,0.0);
-      nod_pt->pin(2);
-      nod_pt->set_value(2,0.0);
-      nod_pt->pin(3);
-      nod_pt->set_value(3,0.0);
-      nod_pt->pin(4);
-      nod_pt->set_value(4,0.0);
+//     // If the node is on the other internal boundary too
+//     if( nod_pt->is_on_boundary(3))
+//     {
+//       // Pin it! It's the centre of the domain!
+//       // In-plane dofs are always 0 and 1
+//       // Out of plane displacement is 2, x and y derivatives are 3 and 4.
+//       nod_pt->pin(0);
+//       nod_pt->set_value(0,0.0);
+//       nod_pt->pin(1);
+//       nod_pt->set_value(1,0.0);
+//       nod_pt->pin(2);
+//       nod_pt->set_value(2,0.0);
+//       nod_pt->pin(3);
+//       nod_pt->set_value(3,0.0);
+//       nod_pt->pin(4);
+//       nod_pt->set_value(4,0.0);
 
 
-    }
-  }
+//     }
+//   }
 
 
-  oomph_info << "rotation pinning node: "
-  << pinned_rotation_node_pt->x(0) << " "
-  << pinned_rotation_node_pt->x(1) << " "
-  << std::endl;
-  // Pin y displacement 
-  pinned_rotation_node_pt->pin(1);
+//   oomph_info << "rotation pinning node: "
+//   << pinned_rotation_node_pt->x(0) << " "
+//   << pinned_rotation_node_pt->x(1) << " "
+//   << std::endl;
+//   // Pin y displacement 
+//   pinned_rotation_node_pt->pin(1);
  
-}
+// }
 
 
 
@@ -758,8 +819,7 @@ void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_cent
 //========================================================================
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
-{
-
+{  
   // Set the boundary conditions
   apply_boundary_conditions();
  
@@ -793,35 +853,65 @@ template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 {
   // Clamp it
-  if (Parameters::Problem_case==Parameters::Clamped_validation)
+  //if (Parameters::Problem_case==Parameters::Clamped_validation)
   {
     // Set the boundary conditions
-    unsigned nbound = 2;
-    for(unsigned b=0;b<nbound;b++)
+    unsigned n_bound = 2;
+    for(unsigned b=0;b<n_bound;b++)
     {
-      const unsigned nb_element = Bulk_mesh_pt->nboundary_element(b);
-      for(unsigned e=0;e<nb_element;e++)
+      const unsigned n_b_element = Bulk_mesh_pt->nboundary_element(b);
+
+      // Get all nodes on the boundary by looping over boundary elements and
+      // using helper functions
+      for(unsigned e=0;e<n_b_element;e++)
       {
 	// Get pointer to bulk element adjacent to b
 	ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
-	
-	// A true clamp, so we set everything except the second normal to zero
-	for(unsigned idof=0; idof<6; ++idof)
-        {
-          // Cannot set second normal derivative
-	  if(idof!=3)
-          {
-	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
-          }
-        }
-      }
-    }
+
+	// Resting pin so set [0, 2, 5]
+	// z-displacement
+	el_pt->fix_out_of_plane_displacement_dof(0,b,Parameters::get_null_fct);
+	// dz/dn
+	// el_pt->fix_out_of_plane_displacement_dof(1,b,Parameters::get_null_fct);
+	// dz/dt
+	el_pt->fix_out_of_plane_displacement_dof(2,b,Parameters::get_null_fct);
+	// d2z/dn2
+	// el_pt->fix_out_of_plane_displacement_dof(3,b,Parameters::get_null_fct);
+	// d2z/dndt
+	// el_pt->fix_out_of_plane_displacement_dof(4,b,Parameters::get_null_fct);
+	// d2z/dt2
+	el_pt->fix_out_of_plane_displacement_dof(5,b,Parameters::get_null_fct);
+      } // End loop over elements [e]
+
+      // On boundary b, apply appropriate boundary conditions at the vertex
+      // node between b and [b+1]%n_bound
+      // (modulo so we find n_bound-1 -- 0 corner)
+      unsigned n_b_node = Bulk_mesh_pt->nboundary_node(b);
+      for(unsigned i_b_node = 0; i_b_node < n_b_node; i_b_node++)
+      {
+	Node* node_pt = Bulk_mesh_pt->boundary_node_pt(b,i_b_node);
+	// If also on the next boundary then we are at a corner
+	if( node_pt->is_on_boundary((b+1)%n_bound) )
+	{
+	  // Homogenous pin both sides so all dofs pinned and zero
+	  for(unsigned j_w_dof = 0; j_w_dof < 6; j_w_dof++)
+	  {
+	    // Pin the dof (+2 due to in-plane dofs) and set to 0.0
+	    unsigned j_dof = j_w_dof+2;
+	    node_pt->pin(j_dof);
+	    node_pt->set_value(j_dof, 0.0);
+	  } // End loop over each dof [j_w_dof]
+	} // End if( at corner )
+      } // End loop over boundary nodes on b [i_b_node]
+      
+    } // End loop over boundaries [b]
+    
   }
-  // All other cases: simply pin and stop rotation via the centre
-  else
-  {
-    pin_all_displacements_and_rotation_at_centre_node();
-  }
+  // // All other cases: simply pin and stop rotation via the centre
+  // else
+  // {
+  //   pin_all_displacements_and_rotation_at_centre_node();
+  // }
  
 } // end set bc
 
@@ -829,19 +919,19 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 
 //==============================================================================
 /// A function that upgrades straight sided elements to be curved. This involves
-// Setting up the parametric boundary, F(s) and the first derivative F'(s)
-// We also need to set the edge number of the upgraded element and the positions
-// of the nodes j and k (defined below) and set which edge (k) is to be exterior
+/// Setting up the parametric boundary, F(s) and the first derivative F'(s)
+/// We also need to set the edge number of the upgraded element and the positions
+/// of the nodes j and k (defined below) and set which edge (k) is to be exterior
 /*            @ k                                                             */
 /*           /(                                                               */
 /*          /. \                                                              */
 /*         /._._)                                                             */
 /*      i @     @ j                                                           */
-// For RESTING or FREE boundaries we need to have a C2 CONTINUOUS boundary
-// representation. That is we need to have a continuous 2nd derivative defined
-// too. This is well discussed in by [Zenisek 1981] (Aplikace matematiky ,
-// Vol. 26 (1981), No. 2, 121--141). This results in the necessity for F''(s)
-// as well.
+/// For RESTING or FREE boundaries we need to have a C2 CONTINUOUS boundary
+/// representation. That is we need to have a continuous 2nd derivative defined
+/// too. This is well discussed in by [Zenisek 1981] (Aplikace matematiky ,
+/// Vol. 26 (1981), No. 2, 121--141). This results in the necessity for F''(s)
+/// as well.
 //==start_of_upgrade_edge_elements==============================================
 template <class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT >::
@@ -952,6 +1042,39 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,5);
   }
 }// end_upgrade_elements
+
+
+
+//==============================================================================
+/// Duplicate nodes at corners in order to properly apply boundary
+/// conditions from each edge. Also adds (8) Lagrange multiplier dofs to the
+/// problem in order to constrain continuous interpolation here across its (8)
+/// vertex dofs. (Note "corner" here refers to the meeting point of any two
+/// sub-boundaries in the closed external boundary)
+//============================================================================== 
+template <class ELEMENT>
+void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
+{
+  // [zdec] WRITEME
+
+  // // Loop over the sections of the external boundary
+  // for()
+  // {
+  //   // Get node and el pts at the boundary vertex
+  //   Node* old_node = ;
+  //   Node* new_node = NEW Node*;
+  //   ELEMENT* left_element = ;
+  //   ELEMENT* right_element = ;
+  //
+  //   // Add new node to right element
+  //   
+  //   // Update boudary info
+  //
+  //   // Create Lagrange multiplier dof
+  //
+  //   // Add nodes and Lagrange multipliers lookup scheme
+  // }
+}
 
 
 
@@ -1084,31 +1207,33 @@ int main(int argc, char **argv)
   CommandLineArgs::specify_command_line_flag("--use_clamped_bc");
 
   // Poisson Ratio
-  CommandLineArgs::specify_command_line_flag("--nu", &Parameters::Nu);
+  CommandLineArgs::specify_command_line_flag("--nu",
+					     &Parameters::Nu);
 
   // Applied Pressure
-  CommandLineArgs::specify_command_line_flag("--p", &Parameters::P_mag);
+  CommandLineArgs::specify_command_line_flag("--p",
+					     &Parameters::P_mag);
 
   // FvK prameter
-  CommandLineArgs::specify_command_line_flag("--eta", &Parameters::Eta);
+  CommandLineArgs::specify_command_line_flag("--eta",
+					     &Parameters::Eta);
 
   // Element Area 
   double element_area=0.05;
   CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
- 
+
+  
+  // Order of the polynomial interpolation of the boundary
+  CommandLineArgs::specify_command_line_flag("--boundary_order",
+					     &Parameters::Boundary_order);
+
+  
   // Parse command line
   CommandLineArgs::parse_and_assign();
 
   // Doc what has actually been specified on the command line
   CommandLineArgs::doc_specified_flags();
 
-
-
-  // Constant pressure for validation case
-  if (CommandLineArgs::command_line_flag_has_been_set("--use_clamped_bc"))
-  {
-    Parameters::Problem_case=Parameters::Clamped_validation;
-  }
 
   // Build problem
   // UnstructuredFvKProblem<NON_WRAPPED_ELEMENT
@@ -1117,74 +1242,21 @@ int main(int argc, char **argv)
     problem(element_area);
 
 
-  double dp_mag=0.000001;
-  double dt_mag=0.000001;
-  unsigned nstep=1000;
+  double dp_mag=0.1;
+  double dt_mag=0.00;
+  unsigned n_step=10;
 
+  for(unsigned i_step = 0; i_step<n_step; i_step++)
+  {
+    // Increment control parameters
+    Parameters::P_mag+=dp_mag;
+    Parameters::T_mag+=dt_mag;
 
-  // Which case are we doing
-  if (Parameters::Problem_case==Parameters::Clamped_validation)
-  {
-    nstep=1;
-    dp_mag=0.0;
-    dt_mag=0.0;
-    Parameters::P_mag=0.0;
-    Parameters::T_mag=0.0;
-  }
-  // 
-  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
-  {
-    nstep=100;
-    dp_mag=0.0;
-    dt_mag=0.000001;
-    Parameters::P_mag=0.001;
-    Parameters::T_mag=0.0;
-  }
-  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
-  {
-    nstep=100;
-    dp_mag=0.0;
-    dt_mag=0.000001;
-    Parameters::P_mag=0.001;
-    Parameters::T_mag=0.0;
-  }
-    
-
-  // Document
-  problem.doc_solution();
-
-  // Loop over all dof types
-  for(unsigned i=0; i<6; i++)
-  {
-    // Set the boundary conditions
-    unsigned nbound = 2;
-    for(unsigned b=0;b<nbound;b++)
-    {
-      const unsigned nb_element = problem.mesh_pt()->nboundary_element(b);
-      for(unsigned e=0;e<nb_element;e++)
-      {
-	// Get pointer to bulk element adjacent to b
-	FoepplVonKarmanC1CurvableBellElement<4>* el_pt =
-	dynamic_cast<FoepplVonKarmanC1CurvableBellElement<4>*>(problem.mesh_pt()->boundary_element_pt(b,e));
-	  
-	// A true clamp, so we set everything except the second normal to zero
-	for(unsigned idof=0; idof<6; ++idof)
-	{
-	  // Cannot set second normal derivative
-	  if(idof==i)
-	  {
-	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_unit_fct);
-	  }
-	  else
-	  {
-	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
-	  }
-	}
-      }
-    }
+    // Solve
+    problem.newton_solve();
 
     // Document
     problem.doc_solution();
   }
-  
+   
 } //End of main
