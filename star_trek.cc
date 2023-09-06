@@ -38,6 +38,7 @@
 // The mesh
 #include "meshes/triangle_mesh.h"
 #include "src/generic/elements.h"
+#include "src/generic/my_geom_object.h"
 
 using namespace std;
 using namespace oomph;
@@ -102,23 +103,27 @@ namespace oomph
   /// vertices where the Hemite data at each node is different but must
   /// be compatible.
   //=======================================================================
-  class ConstrainDupeHermiteFvKNodeElement : public virtual GeneralisedElement
+  class ConstrainDuplicateHermiteFvKNodeElement : public virtual GeneralisedElement
   {
     
   public:
     /// Construcor. Needs the two node pointers so that we can retrieve the
     /// boundary data at solve time
-    ConstrainDupeHermiteFvKNodeElement(Node* left_node_pt,
+    ConstrainDuplicateHermiteFvKNodeElement(Node* left_node_pt,
 				       Node* right_node_pt)
       : Left_node_pt(left_node_pt),
 	Right_node_pt(right_node_pt)
     {
-      // Must assign nodes (add them as external data)
-      // and create Lagrange multiplier data
+      // Add internal data which stores the eight Lagrange multipliers
+      add_internal_data(new Data(8));
+      
+      // Add each node as external data
+      add_external_data(Left_node_pt);
+      add_external_data(Right_node_pt);
     }
 
     /// Destructor
-    ~ConstrainDupeHermiteFvKNodeElement()
+    ~ConstrainDuplicateHermiteFvKNodeElement()
     {
       // Must remove Lagrange multiplier data?
     }
@@ -152,10 +157,163 @@ namespace oomph
       DenseMatrix<double> &jacobian,
       const unsigned &flag)
     {
+      //----------------------------------------------------------------------
+      //----------------------------------------------------------------------
       // Calculate Jacobian and Hessian of coordinate transform between
       // each boundary coordinate
 
-      // Add the residual contribution
+      //----------------------------------------------------------------------
+      // We need the parametrisations either side of the vertex which define
+      // the coordinates each node uses for its Hermite dofs.
+      Vector<double> left_dxids(2,0.0);
+      Vector<double> left_d2xids2(2,0.0);
+      Vector<double> right_dxids(2,0.0);
+      Vector<double> right_d2xids2(2,0.0);
+      Left_boundary_pt->dposition(Left_node_coord, left_dxids);
+      Left_boundary_pt->d2position(Left_node_coord, left_d2xids2);
+      Right_boundary_pt->dposition(Right_node_coord, right_dxids);
+      Right_boundary_pt->d2position(Right_node_coord, right_d2xids2);
+
+      // Get the speed of each parametrisation
+      double left_mag =
+	sqrt(left_dxids[0] * left_dxids[0] + left_dxids[1] * left_dxids[1]);
+      double right_mag =
+	sqrt(right_dxids[0] * right_dxids[0] + right_dxids[1] * right_dxids[1]);
+
+      //----------------------------------------------------------------------
+      // Normalise dxids to find the tangent vectors, normal vectors and their
+      // derivatives either side of the vertex
+      Vector<double> left_ti(2,0.0);
+      Vector<double> left_ni(2,0.0);
+      Vector<double> left_dtids(2,0.0);
+      Vector<double> left_dnids(2,0.0);
+      Vector<double> right_ti(2,0.0);
+      Vector<double> right_ni(2,0.0);
+      Vector<double> right_dtids(2,0.0);
+      Vector<double> right_dnids(2,0.0);
+      for(unsigned alpha=0; alpha<2; alpha++)
+      {
+	// Fill in the tangents either side of the vertex
+	left_ti[alpha]  =  left_dxids[alpha] / left_mag;
+	right_ti[alpha] = right_dxids[alpha] / right_mag;
+	// Fill in the derivatives of the (normalised) tangents either side of
+	// the vertex
+	left_dtids[alpha] = left_d2xids2[alpha] / std::pow(left_mag, 2)
+	  - (left_dxids[0]*left_d2xids2[0]+left_dxids[1]*left_d2xids2[1])
+	  * left_dxids[alpha] / std::pow(left_mag,4);
+	right_dtids[alpha] = right_d2xids2[alpha] / std::pow(right_mag, 2)
+	  - (right_dxids[0]*right_d2xids2[0]+right_dxids[1]*right_d2xids2[1])
+	  * right_dxids[alpha] / std::pow(right_mag,4);
+	// Use these to fill out the corresponding vectors for the normal
+	// direction (nx,ny) = (ty,-tx)
+	left_ni[alpha] = pow(-1,alpha)*left_ti[(alpha+1)%2];
+	right_ni[alpha] = pow(-1,alpha)*right_ti[(alpha+1)%2];
+	left_dnids[alpha] = pow(-1,alpha)*left_dtids[(alpha+1)%2];
+	right_dnids[alpha] = pow(-1,alpha)*right_dtids[(alpha+1)%2];
+      }
+
+      //----------------------------------------------------------------------
+      // We need to fill out the Jacobians and Hessians of the boundary
+      // coordinates either side of the vertex
+      DenseMatrix<double> left_jac(2,2,0.0);
+      DenseMatrix<double> right_jac(2,2,0.0);
+      Vector<DenseMatrix<double>> left_hess(2,DenseMatrix<double>(2,2,0.0));
+      Vector<DenseMatrix<double>> right_hess(2,DenseMatrix<double>(2,2,0.0));
+      for(unsigned alpha=0; alpha<2; alpha++)
+      {
+	// Fill in Jacobians {{nx,tx},{ny,ty}}
+	left_jac(alpha,0) = left_ni[alpha];
+	left_jac(alpha,1) = left_ti[alpha];
+	right_jac(alpha,0) = right_ni[alpha];
+	right_jac(alpha,1) = right_ti[alpha];
+	// Fill in Hessians
+	// left_hess[alpha](0,0) = 0.0;
+	left_hess[alpha](0,1) = left_dnids[alpha];
+	left_hess[alpha](1,0) = left_dnids[alpha];
+	left_hess[alpha](1,1) = left_dtids[alpha];
+	// right_hess[alpha](0,0) = 0.0;
+	right_hess[alpha](0,1) = right_dnids[alpha];
+	right_hess[alpha](1,0) = right_dnids[alpha];
+	right_hess[alpha](1,1) = right_dtids[alpha];
+      }
+
+      //----------------------------------------------------------------------
+      // We need the inverse Jacobian and Hessian for the left parametrisation
+      DenseMatrix<double> left_jac_inv(2,2,0.0);
+      Vector<DenseMatrix<double>> left_hess_inv(2,DenseMatrix<double>(2,2,0.0));
+      left_jac_inv(0,0) = left_jac(1,1);
+      left_jac_inv(0,1) =-left_jac(0,1);
+      left_jac_inv(1,0) =-left_jac(1,0);
+      left_jac_inv(1,1) = left_jac(0,0);
+      // Fill out inverse of Hessian
+      // H^{-1}abg = J^{-1}ad Hdez J^{-1}eb J^{-1}zg
+      for (unsigned alpha = 0; alpha < 2; alpha++)
+      {
+	for (unsigned beta = 0; beta < 2; beta++)
+	{
+	  for (unsigned gamma = 0; gamma < 2; gamma++)
+	  {
+	    for (unsigned alpha2 = 0; alpha2 < 2; alpha2++)
+	    {
+	      for (unsigned beta2 = 0; beta2 < 2; beta2++)
+	      {
+		for (unsigned gamma2 = 0; gamma2 < 2; gamma2++)
+		{
+		  left_hess_inv[alpha](beta, gamma) -=
+		    left_jac_inv(alpha, alpha2)
+		    * left_hess[alpha2](beta2, gamma2)
+		    * left_jac_inv(beta2, beta)
+		    * left_jac_inv(gamma2, gamma);
+		}
+	      }
+	    }
+	  }
+	}
+      }
+
+      //----------------------------------------------------------------------
+      // Use these to calculate the Jacobian of the left->right transform
+      //     J = J_{left}^{-1}J_{right}
+      // and the Hessian of the left->right transform
+      //     H = H_{left}^{-1}J_{right}J_{right} + J_{left}^{-1}H_{right}
+      DenseMatrix<double> jac_of_transform(2,2,0.0);
+      Vector<DenseMatrix<double>> hess_of_transform(2,DenseMatrix<double>(2,2,0.0));
+      for(unsigned alpha = 0; alpha < 2; alpha++)
+      {
+	for(unsigned beta = 0; beta < 2; beta++)
+	{
+	  for(unsigned gamma = 0; gamma < 2; gamma++)
+	  {
+	    // Add contribution to J
+	    jac_of_transform(alpha,beta) +=
+	      left_jac_inv(alpha,gamma) * right_jac(gamma,beta);
+	    for(unsigned mu = 0; mu < 2; mu++)
+	    {
+	      // Add second term contribution to H
+	      hess_of_transform[alpha](beta,gamma) +=
+		left_jac_inv(alpha,mu) * right_hess[mu](beta,gamma);
+	      for(unsigned nu = 0; nu < 2; nu++)
+	      {
+		// Add first term contribution to H
+		hess_of_transform[alpha](beta,gamma) +=
+		  left_hess_inv[alpha](mu,nu)
+		  * right_jac(mu,beta) * right_jac(nu,gamma);
+	      }
+	    }
+	  }
+	}
+      }
+      
+      //----------------------------------------------------------------------
+      //----------------------------------------------------------------------
+      // Finally, we use jac and hess of transform to add the residual
+      // contribution from the constraint
+
+      // First three (Lagrange) dofs are equal
+      for(unsigned i_dof = 0; i_dof < 3; i_dof++)
+      {
+	residuals[i_dof] = 
+      }
 
       // If flag, then add the jacobian contribution
     }
@@ -163,8 +321,20 @@ namespace oomph
     /// Pointer to the left node (before the vertex when anticlockwise)
     Node* Left_node_pt;
     
-    /// Pointer to the left node (after the vertex when anticlockwise)
+    /// Pointer to the right node (after the vertex when anticlockwise)
     Node* Right_node_pt;
+
+    /// Pointer to the left node's boundary parametrisation
+    CurvilineGeomObject* Left_boundary_pt;
+
+    /// Pointer to the right node's boundary parametrisation
+    CurvilineGeomObject* Right_boundary_pt;
+
+    /// Coordinate of the left node on the left boundary
+    Vector<double> Left_node_coord;
+
+    /// Coordinate of the left node on the left boundary
+    Vector<double> Right_node_coord;
   };
 
   //========= start_of_point_force_and_torque_wrapper======================
