@@ -94,13 +94,18 @@ using MathematicalConstants::Pi;
 
 
 
-namespace oomph
-{
+
+
 
   // This is Matthias' unfinished point force wrapper element. It is
   // fully commented out here but may want reviving.
+  // VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
 
-//   // hierher
+// namespace oomph
+// {
+
+
+// //   // hierher
 //   typedef FoepplVonKarmanC1CurvableBellElement<4> NON_WRAPPED_ELEMENT;
 
 
@@ -269,6 +274,11 @@ namespace oomph
 // /// //////////////////////////////////////////////////////////////////
 // /// //////////////////////////////////////////////////////////////////
 
+
+
+  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  // This is Matthias' unfinished point force wrapper element. It is
+  // fully commented out here but may want reviving.
 
 
 //========================================================================

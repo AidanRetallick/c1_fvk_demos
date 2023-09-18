@@ -1,16 +1,18 @@
 #! /bin/bash
 
-executable=star_trek
+executable=rolling_clamp_disc
 make $executable
 
 # Stuff to move
-important_files="$executable.cc
-                 $execuatble
-		 $executable.bash"
+important_files="${executable} 
+                 ${executable}.cc 
+                 ${executable}.bash"
+
+echo $important_files
 
 # Setup directories YOU MUST PICK A NAME FOR YOUR OURPUT DIRECTORY.
-main_dir=NEW_$executable   # Change 0 to be the name of your output directory. e.g. NEW_xyz
-if [ main_dir == 0 ]
+main_dir=NEW_$executable
+if [ main_dir == 0 ]; then
    echo " "
    echo "You need to give your new output a name"
 fi
@@ -42,7 +44,6 @@ mkdir $reslt_dir
 #-------------------------------------------------------------
 echo "Doing "$reslt_dir
 ./$executable \
-    --dir $reslt_dir \
     > $reslt_dir/OUTPUT
 
 echo " "
