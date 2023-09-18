@@ -6,6 +6,7 @@ include $(top_srcdir)/config/makefile_templates/demo_drivers
 noinst_PROGRAMS = clamped_square_inflation \
 		  rotated_square \
 		  circular_disc \
+		  rolling_clamp_disc \
 		  circular_sector \
 		  star_trek \
                   axisym_displ_based_fvk
@@ -28,6 +29,8 @@ rotated_square_SOURCES = \
  rotated_square.cc
 circular_disc_SOURCES = \
  circular_disc.cc
+rolling_clamp_disc_SOURCES = \
+ rolling_clamp_disc.cc
 circular_sector_SOURCES = \
  circular_sector.cc
 star_trek_SOURCES = \
@@ -41,6 +44,9 @@ rotated_square_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 circular_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+rolling_clamp_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 circular_sector_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
