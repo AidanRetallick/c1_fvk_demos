@@ -97,175 +97,177 @@ using MathematicalConstants::Pi;
 namespace oomph
 {
 
+  // This is Matthias' unfinished point force wrapper element. It is
+  // fully commented out here but may want reviving.
 
-  // hierher
-  typedef FoepplVonKarmanC1CurvableBellElement<4> NON_WRAPPED_ELEMENT;
- 
-
-  //========= start_of_point_force_and_torque_wrapper======================
-  /// Class to impose point force and torque to (wrapped) Fvk element
-  //=======================================================================
-  template<class ELEMENT> 
-  class FvKPointForceAndSourceElement : public virtual ELEMENT
-  {
-
-  public:
-
-    /// Constructor
-    FvKPointForceAndSourceElement()
-    {
-      // Add internal Data to store forces (for now)
-      oomph_info << "# of internal Data objects before: " <<
-	this->ninternal_data() << std::endl;
-    }
- 
-    /// Destructor (empty)
-    ~FvKPointForceAndSourceElement(){}
- 
-    /// Set local coordinate and point force and_torque
-    void setup(const Vector<double>& s_point_force_and_torque)
-    {
-      S_point_force_and_torque=s_point_force_and_torque;
-    }
- 
- 
-    /// Add the element's contribution to its residual vector (wrapper)
-    void fill_in_contribution_to_residuals(Vector<double> &residuals)
-    {
-      // Call the generic residuals function with flag set to 0 hierher why no arg?
-      // using a dummy matrix argument
-      ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
-	residuals,
-	GeneralisedElement::Dummy_matrix,
-	0);
-   
-      //fill_in_contribution_to_residuals(residuals);
-
-      // Add point force_and_torque contribution
-      fill_in_point_force_and_torque_contribution_to_residuals(residuals);
-    }
-
- 
-
-    /// Add the element's contribution to its residual vector and
-    /// element Jacobian matrix (wrapper)
-    void fill_in_contribution_to_jacobian(Vector<double> &residuals,
-					  DenseMatrix<double> &jacobian)
-    {
-      //Call the generic routine with the flag set to 1 hierher why no arg?
-      // ELEMENT::fill_in_contribution_to_jacobian(residuals,
-      //                                           jacobian);
-      ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
-	residuals,
-	jacobian,
-	1);
-   
-      // Add point force_and_torque contribution
-      fill_in_point_force_and_torque_contribution_to_residuals(residuals);
-    }
- 
-
-  private:
+//   // hierher
+//   typedef FoepplVonKarmanC1CurvableBellElement<4> NON_WRAPPED_ELEMENT;
 
 
- 
-    /// Add the point force_and_torque contribution to the residual vector
-    void fill_in_point_force_and_torque_contribution_to_residuals(Vector<double> &residuals)
-    {
-      // No further action
-      if (S_point_force_and_torque.size()==0)
-      {
-	oomph_info << "bailing" << std::endl;
-	return;
-      }
-   
+//   //========= start_of_point_force_and_torque_wrapper======================
+//   /// Class to impose point force and torque to (wrapped) Fvk element
+//   //=======================================================================
+//   template<class ELEMENT>
+//   class FvKPointForceAndSourceElement : public virtual ELEMENT
+//   {
 
-      //Find out how many nodes there are
-      const unsigned n_node = this->nnode();
-   
-      //Set up memory for the shape/test functions
-      Shape psi(n_node);
-   
-      // //Integers to store the local equation and unknown numbers
-      // int local_eqn_real=0;
-      // int local_eqn_imag=0; 
-   
-      // Get shape/test fcts
-      this->shape(S_point_force_and_torque,psi);
-   
-      //  // Assemble residuals
-      //  //--------------------------------
-   
-      //  // Loop over the test functions
-      //  for(unsigned l=0;l<n_node;l++)
-      //   {
-      //    // first, compute the real part contribution 
-      //    //-------------------------------------------
-     
-      //    //Get the local equation
-      //    local_eqn_real = this->nodal_local_eqn(l,this->u_index_helmholtz().real());
-     
-      //    /*IF it's not a boundary condition*/
-      //    if(local_eqn_real >= 0)
-      //     {
-      //      residuals[local_eqn_real] += Point_force_and_torque_magnitude.real()*psi(l);
-      //     }     
-     
-      //    // Second, compute the imaginary part contribution 
-      //    //------------------------------------------------
-     
-      //    //Get the local equation
-      //    local_eqn_imag = this->nodal_local_eqn(l,this->u_index_helmholtz().imag());
-     
-      //    /*IF it's not a boundary condition*/
-      //    if(local_eqn_imag >= 0)
-      //     {
-      //      // Add body force/force_and_torque term and Helmholtz bit
-      //      residuals[local_eqn_imag] += Point_force_and_torque_magnitude.imag()*psi(l);
-      //     }     
-      //   }
+//   public:
 
-    }
+//     /// Constructor
+//     FvKPointForceAndSourceElement()
+//     {
+//       // Add internal Data to store forces (for now)
+//       oomph_info << "# of internal Data objects before: " <<
+// 	this->ninternal_data() << std::endl;
+//     }
 
- 
-    /// Local coordinates of point at which point force_and_torque is applied
-    Vector<double> S_point_force_and_torque;
- 
-  };
- 
+//     /// Destructor (empty)
+//     ~FvKPointForceAndSourceElement(){}
+
+//     /// Set local coordinate and point force and_torque
+//     void setup(const Vector<double>& s_point_force_and_torque)
+//     {
+//       S_point_force_and_torque=s_point_force_and_torque;
+//     }
 
 
-  //=======================================================================
-  /// Face geometry for element is the same as that for the underlying
-  /// wrapped element
-  //=======================================================================
-  template<class ELEMENT>
-  class FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> > 
-    : public virtual FaceGeometry<ELEMENT>
-  {
-  public:
-    FaceGeometry() : FaceGeometry<ELEMENT>() {}
-  };
+//     /// Add the element's contribution to its residual vector (wrapper)
+//     void fill_in_contribution_to_residuals(Vector<double> &residuals)
+//     {
+//       // Call the generic residuals function with flag set to 0 hierher why no arg?
+//       // using a dummy matrix argument
+//       ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
+// 	residuals,
+// 	GeneralisedElement::Dummy_matrix,
+// 	0);
+
+//       //fill_in_contribution_to_residuals(residuals);
+
+//       // Add point force_and_torque contribution
+//       fill_in_point_force_and_torque_contribution_to_residuals(residuals);
+//     }
 
 
-  //=======================================================================
-  /// Face geometry of the Face Geometry for element is the same as 
-  /// that for the underlying wrapped element
-  //=======================================================================
-  template<class ELEMENT>
-  class FaceGeometry<FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> > >
-    : public virtual FaceGeometry<FaceGeometry<ELEMENT> >
-  {
-  public:
-    FaceGeometry() : FaceGeometry<FaceGeometry<ELEMENT> >() {}
-  };
+
+//     /// Add the element's contribution to its residual vector and
+//     /// element Jacobian matrix (wrapper)
+//     void fill_in_contribution_to_jacobian(Vector<double> &residuals,
+// 					  DenseMatrix<double> &jacobian)
+//     {
+//       //Call the generic routine with the flag set to 1 hierher why no arg?
+//       // ELEMENT::fill_in_contribution_to_jacobian(residuals,
+//       //                                           jacobian);
+//       ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
+// 	residuals,
+// 	jacobian,
+// 	1);
+
+//       // Add point force_and_torque contribution
+//       fill_in_point_force_and_torque_contribution_to_residuals(residuals);
+//     }
 
 
-}
+//   private:
 
-/// //////////////////////////////////////////////////////////////////
-/// //////////////////////////////////////////////////////////////////
-/// //////////////////////////////////////////////////////////////////
+
+
+//     /// Add the point force_and_torque contribution to the residual vector
+//     void fill_in_point_force_and_torque_contribution_to_residuals(Vector<double> &residuals)
+//     {
+//       // No further action
+//       if (S_point_force_and_torque.size()==0)
+//       {
+// 	oomph_info << "bailing" << std::endl;
+// 	return;
+//       }
+
+
+//       //Find out how many nodes there are
+//       const unsigned n_node = this->nnode();
+
+//       //Set up memory for the shape/test functions
+//       Shape psi(n_node);
+
+//       // //Integers to store the local equation and unknown numbers
+//       // int local_eqn_real=0;
+//       // int local_eqn_imag=0;
+
+//       // Get shape/test fcts
+//       this->shape(S_point_force_and_torque,psi);
+
+//       //  // Assemble residuals
+//       //  //--------------------------------
+
+//       //  // Loop over the test functions
+//       //  for(unsigned l=0;l<n_node;l++)
+//       //   {
+//       //    // first, compute the real part contribution
+//       //    //-------------------------------------------
+
+//       //    //Get the local equation
+//       //    local_eqn_real = this->nodal_local_eqn(l,this->u_index_helmholtz().real());
+
+//       //    /*IF it's not a boundary condition*/
+//       //    if(local_eqn_real >= 0)
+//       //     {
+//       //      residuals[local_eqn_real] += Point_force_and_torque_magnitude.real()*psi(l);
+//       //     }
+
+//       //    // Second, compute the imaginary part contribution
+//       //    //------------------------------------------------
+
+//       //    //Get the local equation
+//       //    local_eqn_imag = this->nodal_local_eqn(l,this->u_index_helmholtz().imag());
+
+//       //    /*IF it's not a boundary condition*/
+//       //    if(local_eqn_imag >= 0)
+//       //     {
+//       //      // Add body force/force_and_torque term and Helmholtz bit
+//       //      residuals[local_eqn_imag] += Point_force_and_torque_magnitude.imag()*psi(l);
+//       //     }
+//       //   }
+
+//     }
+
+
+//     /// Local coordinates of point at which point force_and_torque is applied
+//     Vector<double> S_point_force_and_torque;
+
+//   };
+
+
+
+//   //=======================================================================
+//   /// Face geometry for element is the same as that for the underlying
+//   /// wrapped element
+//   //=======================================================================
+//   template<class ELEMENT>
+//   class FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> >
+//     : public virtual FaceGeometry<ELEMENT>
+//   {
+//   public:
+//     FaceGeometry() : FaceGeometry<ELEMENT>() {}
+//   };
+
+
+//   //=======================================================================
+//   /// Face geometry of the Face Geometry for element is the same as
+//   /// that for the underlying wrapped element
+//   //=======================================================================
+//   template<class ELEMENT>
+//   class FaceGeometry<FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> > >
+//     : public virtual FaceGeometry<FaceGeometry<ELEMENT> >
+//   {
+//   public:
+//     FaceGeometry() : FaceGeometry<FaceGeometry<ELEMENT> >() {}
+//   };
+
+
+// }
+
+// /// //////////////////////////////////////////////////////////////////
+// /// //////////////////////////////////////////////////////////////////
+// /// //////////////////////////////////////////////////////////////////
 
 
 
@@ -286,13 +288,13 @@ namespace Parameters
 
   /// Which case are we doing
   unsigned Problem_case=Clamped_validation; // Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
- 
+
   // Ellipse half axis
   double A = 1.0;
 
   // Other ellipse half axis
   double B = 1.0;
-  
+
   /// Poisson ratio
   double Nu = 0.5;
 
@@ -302,20 +304,20 @@ namespace Parameters
 
   // FvK parameter
   double Eta=2.39e6;
- 
+
   /// Pressure magnitude
   double P_mag = 0.0;
- 
+
   /// In-plane traction magnitude
   double T_mag = 0.0;
 
   /// Order of boundary interpolation
-  unsigned Boundary_order = 3;  
+  unsigned Boundary_order = 3;
 
   // hierher what are these objects? Shouldn't they be
   // used in the mesh generatino too; surely they encode the
   // same information.
- 
+
   /// Parametric curve for the upper half boundary
   CurvilineEllipseTop parametric_curve_top(A,B);
 
@@ -328,9 +330,9 @@ namespace Parameters
     &parametric_curve_top,
     &parametric_curve_bottom
   };
-  
-  
-  
+
+
+
   /// Pressure depending on the position (x,y)
   void get_pressure(const Vector<double>& x, double& pressure)
   {
@@ -358,7 +360,7 @@ namespace Parameters
   }
 
 
- 
+
   /// In plane forcing (shear stress) depending on the position (x,y)
   void get_in_plane_force(const Vector<double>& x, Vector<double>& tau)
   {
@@ -395,28 +397,13 @@ namespace Parameters
 
   }
 
-
-  // hierher: kill but check with Aidan first
- 
-  // // This metric will flag up any non--axisymmetric parts
-  // void axiasymmetry_metric(const Vector<double>& x,
-  //        		  const Vector<double>& u,
-  //        		  const Vector<double>& u_exact,
-  //        		  double& error,
-  //        		  double& norm)
-  // {
-  //  // We use the theta derivative of the out of plane deflection
-  //  error = pow((-x[1]*u[1] + x[0]*u[2])/sqrt(x[0]*x[0]+x[1]*x[1]),2);
-  //  norm  = pow(( x[0]*u[1] + x[1]*u[2])/sqrt(x[0]*x[0]+x[1]*x[1]),2);
-  // }
-
   // Get the null function for applying homogenous BCs
   void get_null_fct(const Vector<double>& X, double& exact_w)
   {
     exact_w = 0.0;
   }
 
-  // Get the unit function for applying homogenous BCs
+  // Get the unit function for applying simple inhomogenous BCs
   void get_unit_fct(const Vector<double>& X, double& exact_w)
   {
     exact_w = 1.0;
@@ -448,7 +435,7 @@ public:
   {
     // Close trace file
     Trace_file.close();
-  
+
     // Clean up memory
     delete Bulk_mesh_pt;
     delete Outer_boundary_pt;
@@ -483,7 +470,7 @@ private:
 
   /// Pin all displacements and rotation (dofs 0-4) at the centre
   void pin_all_displacements_and_rotation_at_centre_node();
- 
+
   /// Setup and build the mesh
   void build_mesh();
 
@@ -502,7 +489,7 @@ private:
   void upgrade_edge_elements_to_curve(const unsigned &b);
 
   // [zdec]
-public:  
+public:
   /// Loop over all edge elements and rotate the Hermite degrees of freedom
   /// to be in the directions of the two in-plane vectors specified in Parameters
   void rotate_edge_degrees_of_freedom();
@@ -531,16 +518,16 @@ private:
 
   /// Doc info object for labeling output
   DocInfo Doc_info;
-  
+
   /// Outer boundary Geom Object
   Ellipse* Outer_boundary_ellipse_pt;
- 
+
   /// The outer curves
   Vector<TriangleMeshCurveSection*> Outer_curvilinear_boundary_pt;
 
   /// The Internal curves
   Vector<TriangleMeshOpenCurve *> Inner_open_boundaries_pt;
- 
+
   /// The close outer boundary
   TriangleMeshClosedCurve* Outer_boundary_pt;
 
@@ -549,7 +536,7 @@ private:
 
   /// The second of the internal boundaries
   TriangleMeshPolyLine* Boundary3_pt;
- 
+
 }; // end_of_problem_class
 
 
@@ -577,7 +564,7 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(const double& element_ar
 
   // Set directory
   Doc_info.set_directory("RESLT");
- 
+
   // Open trace file
   char filename[100];
   sprintf(filename, "RESLT/trace.dat");
@@ -586,7 +573,7 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(const double& element_ar
   // Assign equation numbers
   oomph_info << "Number of equations: "
   << assign_eqn_numbers() << '\n';
- 
+
 } // end Constructor
 
 
@@ -600,24 +587,24 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 {
   Vector<double> zeta(1);
   Vector<double> posn(2);
- 
+
   //Outer boundary
   //--------------
- 
+
   double A = Parameters::A;
   double B = Parameters::B;
   Outer_boundary_ellipse_pt = new Ellipse(A, B);
- 
+
   //First bit
   double zeta_start = 0.0;
   double zeta_end = MathematicalConstants::Pi;
   unsigned nsegment = (int)(MathematicalConstants::Pi/sqrt(Element_area));
- 
+
   Outer_curvilinear_boundary_pt.resize(2);
   Outer_curvilinear_boundary_pt[0] =
     new TriangleMeshCurviLine(Outer_boundary_ellipse_pt, zeta_start,
 			      zeta_end, nsegment, Outer_boundary0);
- 
+
   //Second bit
   zeta_start = MathematicalConstants::Pi;
   zeta_end = 2.0*MathematicalConstants::Pi;
@@ -629,14 +616,14 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   // Combine
   Outer_boundary_pt =
     new TriangleMeshClosedCurve(Outer_curvilinear_boundary_pt);
- 
+
   // Internal open boundaries
   //-------------------------
   // Total number of open curves in the domain
   unsigned n_open_curves = 2;
   // We want internal open curves
   Inner_open_boundaries_pt.resize(n_open_curves);
- 
+
   // Internal bit - this means we can have a boundary which is just the centre
   // We start by creating the internal boundaries
 
@@ -684,20 +671,20 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 
   // Element area
   mesh_parameters.element_area() = Element_area;
- 
+
   // Specify the internal open boundaries
   mesh_parameters.internal_open_curves_pt() = Inner_open_boundaries_pt;
- 
+
   // Build an assign bulk mesh
   Bulk_mesh_pt=new TriangleMesh<ELEMENT>(mesh_parameters);
- 
+
   //Add submesh to problem
   add_sub_mesh(Bulk_mesh_pt);
-  
+
   // Combine submeshes into a single Mesh (over the top; could just have
   // assigned bulk mesh directly.
   build_global_mesh();
- 
+
 }// end build_mesh
 
 
@@ -715,7 +702,7 @@ void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_cent
   // the rigid body rotation around the z axis.
   double max_x_potentially_pinned_node=-DBL_MAX;
   Node* pinned_rotation_node_pt=0;
-  
+
   // Pin the node that is at the centre in the domain
   unsigned num_int_nod=Bulk_mesh_pt->nboundary_node(2);
   for (unsigned inod=0;inod<num_int_nod;inod++)
@@ -735,8 +722,8 @@ void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_cent
       max_x_potentially_pinned_node=fabs(nod_pt->x(0));
       pinned_rotation_node_pt=nod_pt;
     }
-   
-        
+
+
     // If the node is on the other internal boundary too
     if( nod_pt->is_on_boundary(3))
     {
@@ -763,9 +750,9 @@ void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_cent
   << pinned_rotation_node_pt->x(0) << " "
   << pinned_rotation_node_pt->x(1) << " "
   << std::endl;
-  // Pin y displacement 
+  // Pin y displacement
   pinned_rotation_node_pt->pin(1);
- 
+
 }
 
 
@@ -780,7 +767,7 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
 
   // Set the boundary conditions
   apply_boundary_conditions();
- 
+
   // Complete the build of all elements so they are fully functional
   unsigned n_element = Bulk_mesh_pt->nelement();
   for(unsigned e=0;e<n_element;e++)
@@ -791,11 +778,6 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
     //Set the pressure function pointers and the physical constants
     el_pt->pressure_fct_pt() = &Parameters::get_pressure;
     el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
-
-    // hierher Aidan: kill this error metric thing in element
-    // There is no error metric in this case
-    // el_pt->error_metric_fct_pt() = &Parameters::axiasymmetry_metric;
-
     el_pt->nu_pt() = &Parameters::Nu;
     el_pt->eta_pt() = &Parameters::Eta;
   }
@@ -822,7 +804,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
       {
 	// Get pointer to bulk element adjacent to b
 	ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
-	
+
 	// A true clamp, so we set everything except the second normal to zero
 	for(unsigned idof=0; idof<6; ++idof)
         {
@@ -841,7 +823,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
     pin_all_displacements_and_rotation_at_centre_node();
   }
 
- 
+
 } // end set bc
 
 
@@ -876,11 +858,11 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
   case 0:
     parametric_curve_pt = &Parameters::parametric_curve_top;
     break;
-   
+
   case 1:
     parametric_curve_pt = &Parameters::parametric_curve_bottom;
     break;
-   
+
   default:
     throw OomphLibError("Unexpected boundary number.",
 			OOMPH_CURRENT_FUNCTION,
@@ -888,7 +870,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     break;
   } // end parametric curve switch
 
- 
+
   // Loop over the bulk elements adjacent to boundary ibound
   const unsigned n_els=Bulk_mesh_pt->nboundary_element(ibound);
   for(unsigned e=0; e<n_els; e++)
@@ -916,7 +898,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
       Node* nod_pt = bulk_el_pt->node_pt(n);
       xn[n][0]=nod_pt->x(0);
       xn[n][1]=nod_pt->x(1);
-     
+
       // Check if it is on the outer boundaries
       if(!(nod_pt->is_on_boundary(Outer_boundary0) ||
 	   nod_pt->is_on_boundary(Outer_boundary1)))
@@ -929,13 +911,13 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 
     // hierher: ouch! This seems to map (x,y) to zeta! This is at best possible to within
     // a tolerance. Needs a redesign!
-   
+
     // s at the next (cyclic) node after interior
     const double s_ubar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+1) % 3]);
-   
+
     // s at the previous (cyclic) node before interior
     const double s_obar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+2) % 3]);
-   
+
     // Assign edge case
     edge = static_cast<MyC1CurvedElements::Edge>(index_of_interior_node);
 
@@ -981,13 +963,13 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 template <class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
 {
-  
+
   std::ofstream debugstream;
   debugstream.open("test_file");
   debugstream << "x y nx ny tx ty nx_x nx_y ny_x ny_y tx_x tx_y ty_x ty_y"
               << std::endl;
   debugstream.close();
-		
+
   // Get the number of boundaries
   unsigned n_bound = 2;
   // Loop over the bulk elements
@@ -996,7 +978,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
   {
     // Get pointer to bulk element adjacent
     ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
-   
+
     // Loop over each boundary and add the boundary parametrisation to the
     // relevant nodes' boundary data
     for(unsigned b=0; b<n_bound; b++)
@@ -1034,7 +1016,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
   }
 }// end rotate_edge_degrees_of_freedom
 
- 
+
 
 //==start_of_doc_solution=================================================
 /// Doc the solution
@@ -1056,7 +1038,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
   << comment << "\"\n";
   some_file.close();
- 
+
 
   // Find the solution at r=0
   // ----------------------
@@ -1071,9 +1053,9 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   // Compute the interpolated displacement vector
   Vector<double> u_0(12,0.0);
   u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_u_foeppl_von_karman(s);
- 
+
   oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[0] << std::endl;
- 
+
   Trace_file << Parameters::P_mag << " " << u_0[0] << '\n';
 
   // Increment the doc_info number
@@ -1111,7 +1093,7 @@ int main(int argc, char **argv)
   CommandLineArgs::specify_command_line_flag("--eta",
 					     &Parameters::Eta);
 
-  // Element Area 
+  // Element Area
   double element_area=0.09;
   CommandLineArgs::specify_command_line_flag("--element_area",
 					     &element_area);
@@ -1119,7 +1101,7 @@ int main(int argc, char **argv)
   // Order of the boundary interpolation
   CommandLineArgs::specify_command_line_flag("--boundary_order",
 					     &Parameters::Boundary_order);
- 
+
   // Parse command line
   CommandLineArgs::parse_and_assign();
 
@@ -1137,7 +1119,7 @@ int main(int argc, char **argv)
   // Build problem
   // UnstructuredFvKProblem<NON_WRAPPED_ELEMENT
   //UnstructuredFvKProblem<FvKPointForceAndSourceElement<NON_WRAPPED_ELEMENT>>
-  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>> 
+  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
     problem(element_area);
 
 
@@ -1155,7 +1137,7 @@ int main(int argc, char **argv)
   //   Parameters::P_mag=0.0;
   //   Parameters::T_mag=0.0;
   // }
-  // // 
+  // //
   // else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
   // {
   //   nstep=100;
@@ -1172,7 +1154,7 @@ int main(int argc, char **argv)
   //   Parameters::P_mag=0.001;
   //   Parameters::T_mag=0.0;
   // }
-    
+
 
   // Document
   problem.doc_solution();
@@ -1190,7 +1172,7 @@ int main(int argc, char **argv)
 	// Get pointer to bulk element adjacent to b
 	FoepplVonKarmanC1CurvableBellElement<4>* el_pt =
 	dynamic_cast<FoepplVonKarmanC1CurvableBellElement<4>*>(problem.mesh_pt()->boundary_element_pt(b,e));
-	  
+
 	// A true clamp, so we set everything except the second normal to zero
 	for(unsigned idof=0; idof<6; ++idof)
 	{
@@ -1210,5 +1192,5 @@ int main(int argc, char **argv)
     // Document
     problem.doc_solution();
   }
-  
+
 } //End of main
