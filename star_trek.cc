@@ -29,6 +29,7 @@
 //LIC//====================================================================
 #include <fenv.h>
 #include <fstream>
+#include <ios>
 
 //Generic routines
 #include "generic.h"
@@ -38,13 +39,9 @@
 
 // The mesh
 #include "meshes/triangle_mesh.h"
-#include "src/generic/double_vector.h"
-#include "src/generic/elements.h"
-#include "src/generic/linear_algebra_distribution.h"
-#include "src/generic/my_geom_object.h"
-#include "src/generic/nodes.h"
-#include "src/generic/oomph_definitions.h"
-#include "src/generic/unstructured_two_d_mesh_geometry_base.h"
+
+#include "csv.h"
+
 
 using namespace std;
 using namespace oomph;
@@ -104,6 +101,7 @@ using MathematicalConstants::Pi;
 
 namespace oomph
 {
+
   //========= start_of_duplicate_node_constraint_element ==================
   /// Non-geometric element used to constrain dofs between duplicated
   /// vertices where the Hemite data at each node is different but must
@@ -239,31 +237,41 @@ namespace oomph
         // Get whether each value is pinned
         bool right_ui_pinned =
           right_data_pt->is_pinned(i_con);
-        bool left_u3_pinned =
-          left_data_pt->is_pinned(3);
-        bool left_u4_pinned =
-          right_data_pt->is_pinned(4);
-        // If anything is free continue without doing anything else
-        if(!right_ui_pinned || !left_u3_pinned || !left_u4_pinned)
-        {
-          continue;
-        }
 
-        // Calculate the residual of the constraint
-        double constraint_residual = right_data_pt->value(i_con);
-        for(unsigned beta = 0; beta < 2; beta++)
-        {
-          constraint_residual +=
-            - left_data_pt->value(3+beta) * jac_of_transform(beta,alpha);
-        }
-        // Check that the constraint is met and we don't have a tear
-        if(constraint_residual > Constraint_tolerance)
-        {
-          throw_unsatisfiable_constraint_error(i_con, constraint_residual);
-        }
-	// If it is met, we pin the lagrange multiplier that corresponds to
+	// [zdec] temp check
+	bool left_ui_pinned =
+	  left_data_pt->is_pinned(i_con);
+	if(left_ui_pinned && right_ui_pinned)
+	{
+	  internal_data_pt(Index_of_lagrange_data)->pin(i_con);
+	}
+
+	// bool left_u3_pinned =
+        //   left_data_pt->is_pinned(3);
+        // bool left_u4_pinned =
+        //   right_data_pt->is_pinned(4);
+        // // If anything is free continue without doing anything else
+        // if(!right_ui_pinned || !left_u3_pinned || !left_u4_pinned)
+        // {
+        //   continue;
+        // }
+
+        // // Calculate the residual of the constraint
+        // double constraint_residual = right_data_pt->value(i_con);
+        // for(unsigned beta = 0; beta < 2; beta++)
+        // {
+        //   constraint_residual +=
+        //     - left_data_pt->value(3+beta) * jac_of_transform(beta,alpha);
+        // }
+        // // Check that the constraint is met and we don't have a tear
+        // if(constraint_residual > Constraint_tolerance)
+        // {
+        //   throw_unsatisfiable_constraint_error(i_con, constraint_residual);
+        // }
+
+        // // If it is met, we pin the lagrange multiplier that corresponds to
 	// this constraint as it is redundant and results in a zero row/column
-	internal_data_pt(Index_of_lagrange_data)->pin(i_con);
+	// internal_data_pt(Index_of_lagrange_data)->pin(i_con);
       }
 
       // Constraints 5-7 use dofs 5-7 respectively from the right node and
@@ -279,46 +287,55 @@ namespace oomph
           // Get whether each value is pinned
           bool right_ui_pinned =
             right_data_pt->is_pinned(i_con);
-          bool left_u3_pinned =
-            left_data_pt->is_pinned(3);
-          bool left_u4_pinned =
-            right_data_pt->is_pinned(4);
-          bool left_u5_pinned =
-            left_data_pt->is_pinned(5);
-          bool left_u6_pinned =
-            right_data_pt->is_pinned(6);
-          bool left_u7_pinned =
-            left_data_pt->is_pinned(7);
-          // If any of these dofs are unpinned then continue without doing
-          // anything else
-          if(!right_ui_pinned || !left_u3_pinned || !left_u4_pinned
-             || !left_u5_pinned || !left_u6_pinned || !left_u7_pinned)
-          {
-            continue;
-          }
 
-          // Calculate the residual of the constraint
-          double constraint_residual = right_data_pt->value(i_con);
-          for(unsigned gamma = 0; gamma < 2; gamma++)
-          {
-            constraint_residual +=
-              - left_data_pt->value(3+gamma) * hess_of_transform[alpha](beta,gamma);
-            for(unsigned delta = 0; delta < 2; delta++)
-            {
-              constraint_residual +=
-                - left_data_pt->value(5+gamma+delta)
-                * jac_of_transform(gamma,alpha)
-                * jac_of_transform(delta,beta);
-            }
-          }
-          // Check that the constraint is met and we don't have a tear
-          if(constraint_residual > Constraint_tolerance)
-          {
-            throw_unsatisfiable_constraint_error(i_con, constraint_residual);
-          }
-          // If it is met, we pin the lagrange multiplier that corresponds to
-          // this constraint as it is redundant and results in a zero row/column
-          internal_data_pt(Index_of_lagrange_data)->pin(i_con);
+	  // [zdec] temp check
+	  bool left_ui_pinned =
+	    left_data_pt->is_pinned(i_con);
+	  if(left_ui_pinned && right_ui_pinned)
+	  {
+	    internal_data_pt(Index_of_lagrange_data)->pin(i_con);
+	  }
+
+        //   bool left_u3_pinned =
+        //     left_data_pt->is_pinned(3);
+        //   bool left_u4_pinned =
+        //     right_data_pt->is_pinned(4);
+        //   bool left_u5_pinned =
+        //     left_data_pt->is_pinned(5);
+        //   bool left_u6_pinned =
+        //     right_data_pt->is_pinned(6);
+        //   bool left_u7_pinned =
+        //     left_data_pt->is_pinned(7);
+        //   // If any of these dofs are unpinned then continue without doing
+        //   // anything else
+        //   if(!right_ui_pinned || !left_u3_pinned || !left_u4_pinned
+        //      || !left_u5_pinned || !left_u6_pinned || !left_u7_pinned)
+        //   {
+        //     continue;
+        //   }
+
+        //   // Calculate the residual of the constraint
+        //   double constraint_residual = right_data_pt->value(i_con);
+        //   for(unsigned gamma = 0; gamma < 2; gamma++)
+        //   {
+        //     constraint_residual +=
+        //       - left_data_pt->value(3+gamma) * hess_of_transform[alpha](beta,gamma);
+        //     for(unsigned delta = 0; delta < 2; delta++)
+        //     {
+        //       constraint_residual +=
+        //         - left_data_pt->value(5+gamma+delta)
+        //         * jac_of_transform(gamma,alpha)
+        //         * jac_of_transform(delta,beta);
+        //     }
+        //   }
+        //   // Check that the constraint is met and we don't have a tear
+        //   if(constraint_residual > Constraint_tolerance)
+        //   {
+        //     throw_unsatisfiable_constraint_error(i_con, constraint_residual);
+        //   }
+        //   // If it is met, we pin the lagrange multiplier that corresponds to
+        //   // this constraint as it is redundant and results in a zero row/column
+        //   internal_data_pt(Index_of_lagrange_data)->pin(i_con);
         }
       }
     } // End validate_and_pin_redundant_constraints()
@@ -783,7 +800,7 @@ namespace oomph
           }
           // || Add constraining residual ||
           residuals[internal_eqn_number] +=
-            (right_value[internal_eqn_number] - DwJ[alpha]);
+            (right_value[3+alpha] - DwJ[alpha]);
         }
       }
 
@@ -813,14 +830,33 @@ namespace oomph
                   left_value[5+gamma+delta]
                   * jac_of_transform(gamma,alpha)
                   * jac_of_transform(delta,beta);
+		// [zdec] debug
+		cout << alpha << " "
+		     << beta << " "
+		     << gamma << " "
+		     << delta << ": D2wJJ += "
+		     << left_value[5+gamma+delta] << " * " << jac_of_transform(gamma,alpha) << " * " << jac_of_transform(delta,beta) << " = " << D2wJJ[alpha+beta] << endl;
               }
               // Add contributions to D(w)*H
               DwH[alpha+beta] +=
                 left_value[3+gamma] * hess_of_transform[gamma](alpha,beta);
+	      // [zdec] debug
+	      cout << alpha << " "
+		   << beta << " "
+		   << gamma << " "
+		   << ": DwH += "
+		   << left_value[3+gamma] << " * " << hess_of_transform[gamma](alpha,beta) << " = " << DwH[alpha+beta] << endl;
             }
+	    // [zdec] debug
+	    cout << alpha << " "
+		 << beta << " "
+		 << ": res += " << right_value[5+alpha+beta]
+		 << " - " << D2wJJ[alpha+beta]
+		 << " - " << DwH[alpha+beta] << endl;
+
             // || Add constraining residual ||
             residuals[internal_eqn_number] +=
-              (right_value[internal_eqn_number] - D2wJJ[alpha+beta] - DwH[alpha+beta]);
+              (right_value[5+alpha+beta] - D2wJJ[alpha+beta] - DwH[alpha+beta]);
           } // End if eqn not pinned
         }
       }
@@ -862,165 +898,165 @@ namespace oomph
 
 
 
+  // This is Matthias' wrapper element code
+
+  // //========= start_of_point_force_and_torque_wrapper======================
+  // /// Class to impose point force and torque to (wrapped) Fvk element
+  // //=======================================================================
+  // template<class ELEMENT>
+  // class FvKPointForceAndSourceElement : public virtual ELEMENT
+  // {
+
+  // public:
+
+  //   /// Constructor
+  //   FvKPointForceAndSourceElement()
+  //   {
+  //     // Add internal Data to store forces (for now)
+  //     oomph_info << "# of internal Data objects before: " <<
+  //       this->ninternal_data() << std::endl;
+  //   }
+
+  //   /// Destructor (empty)
+  //   ~FvKPointForceAndSourceElement(){}
+
+  //   /// Set local coordinate and point force and_torque
+  //   void setup(const Vector<double>& s_point_force_and_torque)
+  //   {
+  //     S_point_force_and_torque=s_point_force_and_torque;
+  //   }
 
 
-  //========= start_of_point_force_and_torque_wrapper======================
-  /// Class to impose point force and torque to (wrapped) Fvk element
-  //=======================================================================
-  template<class ELEMENT>
-  class FvKPointForceAndSourceElement : public virtual ELEMENT
-  {
+  //   /// Add the element's contribution to its residual vector (wrapper)
+  //   void fill_in_contribution_to_residuals(Vector<double> &residuals)
+  //   {
+  //     // Call the generic residuals function with flag set to 0 hierher why no arg?
+  //     // using a dummy matrix argument
+  //     ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
+  //       residuals,
+  //       GeneralisedElement::Dummy_matrix,
+  //       0);
 
-  public:
+  //     // fill_in_contribution_to_residuals(residuals);
 
-    /// Constructor
-    FvKPointForceAndSourceElement()
-    {
-      // Add internal Data to store forces (for now)
-      oomph_info << "# of internal Data objects before: " <<
-        this->ninternal_data() << std::endl;
-    }
-
-    /// Destructor (empty)
-    ~FvKPointForceAndSourceElement(){}
-
-    /// Set local coordinate and point force and_torque
-    void setup(const Vector<double>& s_point_force_and_torque)
-    {
-      S_point_force_and_torque=s_point_force_and_torque;
-    }
-
-
-    /// Add the element's contribution to its residual vector (wrapper)
-    void fill_in_contribution_to_residuals(Vector<double> &residuals)
-    {
-      // Call the generic residuals function with flag set to 0 hierher why no arg?
-      // using a dummy matrix argument
-      ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
-        residuals,
-        GeneralisedElement::Dummy_matrix,
-        0);
-
-      // fill_in_contribution_to_residuals(residuals);
-
-      // Add point force_and_torque contribution
-      fill_in_point_force_and_torque_contribution_to_residuals(residuals);
-    }
-
-
-
-    /// Add the element's contribution to its residual vector and
-    /// element Jacobian matrix (wrapper)
-    void fill_in_contribution_to_jacobian(Vector<double> &residuals,
-                                          DenseMatrix<double> &jacobian)
-    {
-      //Call the generic routine with the flag set to 1 hierher why no arg?
-      // ELEMENT::fill_in_contribution_to_jacobian(residuals,
-      //                                           jacobian);
-      ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
-        residuals,
-        jacobian,
-        1);
-
-      // Add point force_and_torque contribution
-      fill_in_point_force_and_torque_contribution_to_residuals(residuals);
-    }
-
-
-  private:
+  //     // Add point force_and_torque contribution
+  //     fill_in_point_force_and_torque_contribution_to_residuals(residuals);
+  //   }
 
 
 
-    /// Add the point force_and_torque contribution to the residual vector
-    void fill_in_point_force_and_torque_contribution_to_residuals(Vector<double> &residuals)
-    {
-      // No further action
-      if (S_point_force_and_torque.size()==0)
-      {
-        oomph_info << "bailing" << std::endl;
-        return;
-      }
+  //   /// Add the element's contribution to its residual vector and
+  //   /// element Jacobian matrix (wrapper)
+  //   void fill_in_contribution_to_jacobian(Vector<double> &residuals,
+  //                                         DenseMatrix<double> &jacobian)
+  //   {
+  //     //Call the generic routine with the flag set to 1 hierher why no arg?
+  //     // ELEMENT::fill_in_contribution_to_jacobian(residuals,
+  //     //                                           jacobian);
+  //     ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
+  //       residuals,
+  //       jacobian,
+  //       1);
+
+  //     // Add point force_and_torque contribution
+  //     fill_in_point_force_and_torque_contribution_to_residuals(residuals);
+  //   }
 
 
-      //Find out how many nodes there are
-      const unsigned n_node = this->nnode();
-
-      //Set up memory for the shape/test functions
-      Shape psi(n_node);
-
-      //Integers to store the local equation and unknown numbers
-      // int local_eqn_real=0;
-      // int local_eqn_imag=0;
-
-      // Get shape/test fcts
-      this->shape(S_point_force_and_torque,psi);
-
-      //  // Assemble residuals
-      //  //--------------------------------
-
-      //  // Loop over the test functions
-      //  for(unsigned l=0;l<n_node;l++)
-      //   {
-      //    // first, compute the real part contribution
-      //    //-------------------------------------------
-
-      //    //Get the local equation
-      //    local_eqn_real = this->nodal_local_eqn(l,this->u_index_helmholtz().real());
-
-      //    /*IF it's not a boundary condition*/
-      //    if(local_eqn_real >= 0)
-      //     {
-      //      residuals[local_eqn_real] += Point_force_and_torque_magnitude.real()*psi(l);
-      //     }
-
-      //    // Second, compute the imaginary part contribution
-      //    //------------------------------------------------
-
-      //    //Get the local equation
-      //    local_eqn_imag = this->nodal_local_eqn(l,this->u_index_helmholtz().imag());
-
-      //    /*IF it's not a boundary condition*/
-      //    if(local_eqn_imag >= 0)
-      //     {
-      //      // Add body force/force_and_torque term and Helmholtz bit
-      //      residuals[local_eqn_imag] += Point_force_and_torque_magnitude.imag()*psi(l);
-      //     }
-      //   }
-
-    }
-
-
-    /// Local coordinates of point at which point force_and_torque is applied
-    Vector<double> S_point_force_and_torque;
-
-  };
+  // private:
 
 
 
-  //=======================================================================
-  /// Face geometry for element is the same as that for the underlying
-  /// wrapped element
-  //=======================================================================
-  template<class ELEMENT>
-  class FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> >
-    : public virtual FaceGeometry<ELEMENT>
-  {
-  public:
-    FaceGeometry() : FaceGeometry<ELEMENT>() {}
-  };
+  //   /// Add the point force_and_torque contribution to the residual vector
+  //   void fill_in_point_force_and_torque_contribution_to_residuals(Vector<double> &residuals)
+  //   {
+  //     // No further action
+  //     if (S_point_force_and_torque.size()==0)
+  //     {
+  //       oomph_info << "bailing" << std::endl;
+  //       return;
+  //     }
 
 
-  //=======================================================================
-  /// Face geometry of the Face Geometry for element is the same as
-  /// that for the underlying wrapped element
-  //=======================================================================
-  template<class ELEMENT>
-  class FaceGeometry<FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> > >
-    : public virtual FaceGeometry<FaceGeometry<ELEMENT> >
-  {
-  public:
-    FaceGeometry() : FaceGeometry<FaceGeometry<ELEMENT> >() {}
-  };
+  //     //Find out how many nodes there are
+  //     const unsigned n_node = this->nnode();
+
+  //     //Set up memory for the shape/test functions
+  //     Shape psi(n_node);
+
+  //     //Integers to store the local equation and unknown numbers
+  //     // int local_eqn_real=0;
+  //     // int local_eqn_imag=0;
+
+  //     // Get shape/test fcts
+  //     this->shape(S_point_force_and_torque,psi);
+
+  //     //  // Assemble residuals
+  //     //  //--------------------------------
+
+  //     //  // Loop over the test functions
+  //     //  for(unsigned l=0;l<n_node;l++)
+  //     //   {
+  //     //    // first, compute the real part contribution
+  //     //    //-------------------------------------------
+
+  //     //    //Get the local equation
+  //     //    local_eqn_real = this->nodal_local_eqn(l,this->u_index_helmholtz().real());
+
+  //     //    /*IF it's not a boundary condition*/
+  //     //    if(local_eqn_real >= 0)
+  //     //     {
+  //     //      residuals[local_eqn_real] += Point_force_and_torque_magnitude.real()*psi(l);
+  //     //     }
+
+  //     //    // Second, compute the imaginary part contribution
+  //     //    //------------------------------------------------
+
+  //     //    //Get the local equation
+  //     //    local_eqn_imag = this->nodal_local_eqn(l,this->u_index_helmholtz().imag());
+
+  //     //    /*IF it's not a boundary condition*/
+  //     //    if(local_eqn_imag >= 0)
+  //     //     {
+  //     //      // Add body force/force_and_torque term and Helmholtz bit
+  //     //      residuals[local_eqn_imag] += Point_force_and_torque_magnitude.imag()*psi(l);
+  //     //     }
+  //     //   }
+
+  //   }
+
+
+  //   /// Local coordinates of point at which point force_and_torque is applied
+  //   Vector<double> S_point_force_and_torque;
+
+  // };
+
+
+
+  // //=======================================================================
+  // /// Face geometry for element is the same as that for the underlying
+  // /// wrapped element
+  // //=======================================================================
+  // template<class ELEMENT>
+  // class FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> >
+  //   : public virtual FaceGeometry<ELEMENT>
+  // {
+  // public:
+  //   FaceGeometry() : FaceGeometry<ELEMENT>() {}
+  // };
+
+
+  // //=======================================================================
+  // /// Face geometry of the Face Geometry for element is the same as
+  // /// that for the underlying wrapped element
+  // //=======================================================================
+  // template<class ELEMENT>
+  // class FaceGeometry<FaceGeometry<FvKPointForceAndSourceElement<ELEMENT> > >
+  //   : public virtual FaceGeometry<FaceGeometry<ELEMENT> >
+  // {
+  // public:
+  //   FaceGeometry() : FaceGeometry<FaceGeometry<ELEMENT> >() {}
+  // };
 
 
 }
@@ -1355,6 +1391,31 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(const double& element_ar
   oomph_info << "Number of equations: "
              << assign_eqn_numbers() << '\n';
 
+  ofstream debug;
+  debug.open("boundary_nodes0.txt");
+  for(unsigned b = 0; b < 2; b++)
+  {
+    for(unsigned n = 0; n<Bulk_mesh_pt->nnode(); n++)
+    {
+      if(Bulk_mesh_pt->node_pt(n)->is_on_boundary(b))
+      {
+	debug << b << ", " << Bulk_mesh_pt->node_pt(n)->x(0)
+	      << ", " << Bulk_mesh_pt->node_pt(n)->x(1) << std::endl;
+      }
+    }
+  }
+  debug.close();
+  debug.open("boundary_nodes1.txt");
+  for(unsigned b = 0; b < 2; b++)
+  {
+    for(unsigned n = 0; n<Bulk_mesh_pt->nboundary_node(b); n++)
+    {
+      debug << b << ", " << Bulk_mesh_pt->boundary_node_pt(b,n)->x(0)
+	    << ", " << Bulk_mesh_pt->boundary_node_pt(b,n)->x(1) << std::endl;
+    }
+  }
+  debug.close();
+
   // Doc the equations
   describe_dofs();
 
@@ -1387,14 +1448,14 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   //First bit
   double zeta_start = theta1;
   double zeta_end = -theta1;
-  unsigned nsegment = (int)(2.0*(theta2-theta1)/sqrt(Element_area))+2;
+  unsigned nsegment = (int)(4.0*(theta2-theta1)/sqrt(Element_area))+2;
 
   Outer_curvilinear_boundary_pt.resize(2);
   Outer_curvilinear_boundary_pt[0] =
     new TriangleMeshCurviLine(Parameters::Parametric_curve_pt[0], zeta_start,
                               zeta_end, nsegment, Outer_boundary0);
 
-  //Second bit (Even though we go from 2->1, the parametrisation is flipped)
+
   zeta_start = theta2;
   zeta_end = -theta2;
   Outer_curvilinear_boundary_pt[1] =
@@ -1438,64 +1499,64 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   Bulk_mesh_pt->
     template split_elements_with_multiple_boundary_edges<ELEMENT>(time_stepper_pt);
 
-  // // [debug] Print the number of boundaries each node is on (there should only
-  // // be 2 nodes on 2 boundaries)
-  // unsigned n_node = Bulk_mesh_pt->nnode();
-  // for(unsigned i_node = 0; i_node < n_node; i_node++)
-  // {
-  //   unsigned tot = 0;
-  //   Node* node_pt = Bulk_mesh_pt->node_pt(i_node);
-  //   unsigned n_bound = Bulk_mesh_pt->nboundary();
-  //   for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
-  //   {
-  //     tot += node_pt->is_on_boundary(i_bound);
-  //   }
-  //   cout << "Node " << i_node
-  //     << " at (" << node_pt->x(0) << "," << node_pt->x(1)
-  //     << ") is on " << tot << " boundaries: ";
-  //   std::set<unsigned>* boundaries_pt;
-  //   BoundaryNodeBase* bnode_pt = dynamic_cast<BoundaryNodeBase*>(node_pt);
-  //   if(bnode_pt)
-  //   {
-  //     bnode_pt->get_boundaries_pt(boundaries_pt);
-  //     for(unsigned b: *boundaries_pt)
-  //     {
-  //    oomph_info << b << ", ";
-  //     }
-  //   }
-  //   oomph_info << std::endl;
-  // }
+  // [debug] Print the number of boundaries each node is on (there should only
+  // be 2 nodes on 2 boundaries)
+  unsigned n_node = Bulk_mesh_pt->nnode();
+  for(unsigned i_node = 0; i_node < n_node; i_node++)
+  {
+    unsigned tot = 0;
+    Node* node_pt = Bulk_mesh_pt->node_pt(i_node);
+    unsigned n_bound = Bulk_mesh_pt->nboundary();
+    for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
+    {
+      tot += node_pt->is_on_boundary(i_bound);
+    }
+    cout << "Node " << i_node
+      << " at (" << node_pt->x(0) << "," << node_pt->x(1)
+      << ") is on " << tot << " boundaries: ";
+    std::set<unsigned>* boundaries_pt;
+    BoundaryNodeBase* bnode_pt = dynamic_cast<BoundaryNodeBase*>(node_pt);
+    if(bnode_pt)
+    {
+      bnode_pt->get_boundaries_pt(boundaries_pt);
+      for(unsigned b: *boundaries_pt)
+      {
+     oomph_info << b << ", ";
+      }
+    }
+    oomph_info << std::endl;
+  }
 
   // Add extra nodes at boundaries and constrain the dofs there.
-  duplicate_corner_nodes();
+  // duplicate_corner_nodes();
 
-  // // [debug] Print the number of boundaries each node is on (there should only
-  // // be 2 nodes on 2 boundaries)
-  // n_node = Bulk_mesh_pt->nnode();
-  // for(unsigned i_node = 0; i_node < n_node; i_node++)
-  // {
-  //   unsigned tot = 0;
-  //   Node* node_pt = Bulk_mesh_pt->node_pt(i_node);
-  //   unsigned n_bound = Bulk_mesh_pt->nboundary();
-  //   for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
-  //   {
-  //     tot += node_pt->is_on_boundary(i_bound);
-  //   }
-  //   cout << "Node " << i_node
-  //     << " at (" << node_pt->x(0) << "," << node_pt->x(1)
-  //     << ") is on " << tot << " boundaries: ";
-  //   std::set<unsigned>* boundaries_pt;
-  //   BoundaryNodeBase* bnode_pt = dynamic_cast<BoundaryNodeBase*>(node_pt);
-  //   if(bnode_pt)
-  //   {
-  //     bnode_pt->get_boundaries_pt(boundaries_pt);
-  //     for(unsigned b: *boundaries_pt)
-  //     {
-  //    oomph_info << b << ", ";
-  //     }
-  //   }
-  //   oomph_info << std::endl;
-  // }
+  // [debug] Print the number of boundaries each node is on (there should only
+  // be 2 nodes on 2 boundaries)
+  n_node = Bulk_mesh_pt->nnode();
+  for(unsigned i_node = 0; i_node < n_node; i_node++)
+  {
+    unsigned tot = 0;
+    Node* node_pt = Bulk_mesh_pt->node_pt(i_node);
+    unsigned n_bound = Bulk_mesh_pt->nboundary();
+    for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
+    {
+      tot += node_pt->is_on_boundary(i_bound);
+    }
+    cout << "Node " << i_node
+      << " at (" << node_pt->x(0) << "," << node_pt->x(1)
+      << ") is on " << tot << " boundaries: ";
+    std::set<unsigned>* boundaries_pt;
+    BoundaryNodeBase* bnode_pt = dynamic_cast<BoundaryNodeBase*>(node_pt);
+    if(bnode_pt)
+    {
+      bnode_pt->get_boundaries_pt(boundaries_pt);
+      for(unsigned b: *boundaries_pt)
+      {
+     oomph_info << b << ", ";
+      }
+    }
+    oomph_info << std::endl;
+  }
 
   //Add submesh to problem
   add_sub_mesh(Bulk_mesh_pt);
@@ -1591,9 +1652,19 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   unsigned n_el = Constraint_mesh_pt->nelement();
   for(unsigned i_el = 0; i_el < n_el; i_el++)
   {
-    dynamic_cast<DuplicateNodeConstraintElement*>
-      (Constraint_mesh_pt->element_pt(i_el))
-      ->validate_and_pin_redundant_constraints();
+  //   dynamic_cast<DuplicateNodeConstraintElement*>
+  //     (Constraint_mesh_pt->element_pt(i_el))
+  //     ->validate_and_pin_redundant_constraints();
+    for(unsigned i_dof = 0; i_dof < 8; i_dof++)
+    {
+      if(i_dof!=5 && i_dof!=6)
+      {
+        dynamic_cast<DuplicateNodeConstraintElement*>(
+          Constraint_mesh_pt->element_pt(i_el))
+          ->internal_data_pt(0)
+          ->pin(i_dof);
+      }
+    }
   }
 
   // Complete the build of all elements so they are fully functional
@@ -1626,7 +1697,7 @@ template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 {
   // Set the boundary conditions
-  unsigned n_bound = 1;
+  unsigned n_bound = 2;
   for(unsigned b=0;b<n_bound;b++)
   {
     const unsigned n_b_element = Bulk_mesh_pt->nboundary_element(b);
@@ -1638,18 +1709,17 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
       // Get pointer to bulk element adjacent to b
       ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
 
+      // Pin in-plane dofs
+      el_pt->fix_in_plane_displacement_dof(0,b,Parameters::get_null_fct);
+      el_pt->fix_in_plane_displacement_dof(1,b,Parameters::get_null_fct);
+
       // Resting pin so set [0, 2, 5]
       // z-displacement
       el_pt->fix_out_of_plane_displacement_dof(0,b,Parameters::get_null_fct);
-      // dz/dn
-      // el_pt->fix_out_of_plane_displacement_dof(1,b,Parameters::get_null_fct);
-      // dz/dt
+      el_pt->fix_out_of_plane_displacement_dof(1,b,Parameters::get_null_fct);
       el_pt->fix_out_of_plane_displacement_dof(2,b,Parameters::get_null_fct);
-      // d2z/dn2
       // el_pt->fix_out_of_plane_displacement_dof(3,b,Parameters::get_null_fct);
-      // d2z/dndt
-      // el_pt->fix_out_of_plane_displacement_dof(4,b,Parameters::get_null_fct);
-      // d2z/dt2
+      el_pt->fix_out_of_plane_displacement_dof(4,b,Parameters::get_null_fct);
       el_pt->fix_out_of_plane_displacement_dof(5,b,Parameters::get_null_fct);
     } // End loop over elements [e]
 
@@ -2110,9 +2180,9 @@ int main(int argc, char **argv)
   UnstructuredFvKProblem<FvKelement>
     problem(element_area);
 
-  double dp_mag=0.1;
+  double dp_mag=0.5;
   double dt_mag=0.00;
-  unsigned n_step=10;
+  unsigned n_step=2;
 
   // Doc initial
   problem.doc_solution();
@@ -2149,28 +2219,92 @@ int main(int argc, char **argv)
     problem.doc_solution();
   }
 
-  // assign random initial values to the dofs and print the residuals to see if
-  // we get repeated lines
+  cout << "Zero state:" << std::endl;
+  // Get res and jac for zero state
+  LinearAlgebraDistribution* dist = problem.dof_distribution_pt();
+  DoubleVector res(dist,0.0);
+  CRDoubleMatrix jac(dist);
+  problem.get_jacobian(res,jac);
+  res.output("residual_zero.txt");
+  jac.sparse_indexed_output("cr_jacobian_zero.txt");
+
+  cout << "Random state:" << std::endl;
+  // Get res and jac for 'random' state
   unsigned n_dofs = problem.ndof();
   for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
   {
-    *(problem.dof_pt(i_dof)) += 0.01 * sin(i_dof);
+    *(problem.dof_pt(i_dof)) += 0.0001 * sin(i_dof+1.0/Pi);
   }
 
-  LinearAlgebraDistribution* dist = problem.dof_distribution_pt();
-  DoubleVector res(dist,0.0);
-  problem.get_residuals(res);
+  problem.get_jacobian(res,jac);
+  res.output("residual_rand.txt");
+  jac.sparse_indexed_output("cr_jacobian_rand.txt");
 
-  ofstream out;
-  out.open("residual_test.csv");
-  res.output(out);
-  out.close();
+  // // Get res and jac of eigenmodes read from csv
+  // io::CSVReader<4> in("eigmodes.csv");
+  // Vector<double> E1(0);
+  // Vector<double> E2(0);
+  // Vector<double> E3(0);
+  // Vector<double> E4(0);
+  // double e1 = 0.0;
+  // double e2 = 0.0;
+  // double e3 = 0.0;
+  // double e4 = 0.0;
+  // while(in.read_row(e1,e2,e3,e4))
+  // {
+  //   E1.push_back(e1);
+  //   E2.push_back(e2);
+  //   E3.push_back(e3);
+  //   E4.push_back(e4);
+  // }
 
+  // cout << "Eig1 state:" << std::endl;
+  // for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
+  // {
+  //   *(problem.dof_pt(i_dof)) = E1[i_dof];
+  // }
+  // problem.get_jacobian(res,jac);
+  // res.output("residual_mode1.txt");
+  // jac.sparse_indexed_output("cr_jacobian_mode1.txt");
+  // problem.doc_solution();
+
+  // cout << "Eig2 state:" << std::endl;
+  // for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
+  // {
+  //   *(problem.dof_pt(i_dof)) = E2[i_dof];
+  // }
+  // problem.get_jacobian(res,jac);
+  // res.output("residual_mode2.txt");
+  // jac.sparse_indexed_output("cr_jacobian_mode2.txt");
+  // problem.doc_solution();
+
+  // cout << "Eig3 state:" << std::endl;
+  // for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
+  // {
+  //   *(problem.dof_pt(i_dof)) = E3[i_dof];
+  // }
+  // problem.get_jacobian(res,jac);
+  // res.output("residual_mode3.txt");
+  // jac.sparse_indexed_output("cr_jacobian_mode2.txt");
+  // problem.doc_solution();
+
+  // cout << "Eig4 state:" << std::endl;
+  // for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
+  // {
+  //   *(problem.dof_pt(i_dof)) = E4[i_dof];
+  // }
+  // problem.get_jacobian(res,jac);
+  // res.output("residual_mode4.txt");
+  // jac.sparse_indexed_output("cr_jacobian_mode2.txt");
+  // problem.doc_solution();
+
+
+  cout << "Solve:" << std::endl;
+  // Reset the dofs to zero
   for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
   {
     *(problem.dof_pt(i_dof)) = 0.0;
   }
-
   // Test the solutions
   for(unsigned i_step = 0; i_step<n_step; i_step++)
   {
@@ -2184,5 +2318,10 @@ int main(int argc, char **argv)
     // Document
     problem.doc_solution();
   }
+
+  // Doc the dofs here
+  DoubleVector dofs(dist);
+  problem.get_dofs(dofs);
+  dofs.output("solution_dofs.txt");
 
 } //End of main
