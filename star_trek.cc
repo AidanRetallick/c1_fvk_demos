@@ -291,13 +291,13 @@ namespace Parameters
   double A1 = 0.5;
 
   /// Upper ellipse y span
-  double B1 = 1.5;
+  double B1 = 1.0;
   
   /// Lower ellipse x span
-  double A2 = 0.6;
+  double A2 = 1.0;
 
   /// Lower ellipse y span
-  double B2 = 0.7;
+  double B2 = 0.5;
   
   /// x-component of intersection (positive value)
   double X_intersect = sqrt(A1*A1*A2*A2*(B1*B1-B2*B2)
@@ -805,15 +805,32 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 	// Get pointer to bulk element adjacent to b
 	ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
 	
-	// A true clamp, so we set everything except the second normal to zero
+	// Pinned boundaries
 	for(unsigned idof=0; idof<6; ++idof)
         {
+	  if(idof<2)
+	  {
+	    el_pt->fix_in_plane_displacement_dof(idof,b,Parameters::get_null_fct);
+	  }
           // Cannot set second normal derivative
-	  if(idof!=3)
+	  if(idof==0 || idof==2 || idof==5)
           {
 	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
           }
         }
+      }
+      unsigned nb_node = Bulk_mesh_pt->nboundary_node(b);
+      for(unsigned ib_node=0; ib_node < nb_node; ib_node++)
+      {
+	Node* node_pt = Bulk_mesh_pt->boundary_node_pt(b,ib_node);
+	if(node_pt->is_on_boundary((b+1)%nbound))
+	{
+	  for(unsigned i = 0; i<8; i++)
+	  {
+	    node_pt->pin(i);
+	    node_pt->set_value(i,0.0);
+	  }
+	}
       }
     }
   }
@@ -1153,38 +1170,42 @@ int main(int argc, char **argv)
   // Document
   problem.doc_solution();
 
-  // Loop over all dof types
-  for(unsigned i=0; i<6; i++)
-  {
-    // Set the boundary conditions
-    unsigned nbound = 2;
-    for(unsigned b=0;b<nbound;b++)
-    {
-      const unsigned nb_element = problem.mesh_pt()->nboundary_element(b);
-      for(unsigned e=0;e<nb_element;e++)
-      {
-	// Get pointer to bulk element adjacent to b
-	FoepplVonKarmanC1CurvableBellElement<4>* el_pt =
-	dynamic_cast<FoepplVonKarmanC1CurvableBellElement<4>*>(problem.mesh_pt()->boundary_element_pt(b,e));
+  Parameters::P_mag=1.0;
+  problem.newton_solve();
+  problem.doc_solution();
+  
+//   // Loop over all dof types
+//   for(unsigned i=0; i<6; i++)
+//   {
+//     // Set the boundary conditions
+//     unsigned nbound = 2;
+//     for(unsigned b=0;b<nbound;b++)
+//     {
+//       const unsigned nb_element = problem.mesh_pt()->nboundary_element(b);
+//       for(unsigned e=0;e<nb_element;e++)
+//       {
+// 	// Get pointer to bulk element adjacent to b
+// 	FoepplVonKarmanC1CurvableBellElement<4>* el_pt =
+// 	dynamic_cast<FoepplVonKarmanC1CurvableBellElement<4>*>(problem.mesh_pt()->boundary_element_pt(b,e));
 	  
-	// A true clamp, so we set everything except the second normal to zero
-	for(unsigned idof=0; idof<6; ++idof)
-	{
-	  // Cannot set second normal derivative
-	  if(idof==i)
-	  {
-	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_unit_fct);
-	  }
-	  else
-	  {
-	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
-	  }
-	}
-      }
-    }
+// 	// A true clamp, so we set everything except the second normal to zero
+// 	for(unsigned idof=0; idof<6; ++idof)
+// 	{
+// 	  // Cannot set second normal derivative
+// 	  if(idof==i)
+// 	  {
+// 	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_unit_fct);
+// 	  }
+// 	  else
+// 	  {
+// 	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
+// 	  }
+// 	}
+//       }
+//     }
 
-    // Document
-    problem.doc_solution();
-  }
+//     // Document
+//     problem.doc_solution();
+//   }
   
 } //End of main
