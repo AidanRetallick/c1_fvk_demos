@@ -127,12 +127,13 @@ namespace oomph
   public:
     /// Construcor. Needs the two node pointers so that we can retrieve the
     /// boundary data at solve time
-    DuplicateNodeConstraintElement(Node* const &left_node_pt,
-                                   Node* const &right_node_pt,
-                                   CurvilineGeomObject* const &left_boundary_pt,
-                                   CurvilineGeomObject* const &right_boundary_pt,
-                                   Vector<double> const &left_coord,
-                                   Vector<double> const &right_coord)
+    DuplicateNodeConstraintElement(
+      Node* const &left_node_pt,
+      Node* const &right_node_pt,
+      CurvilineGeomObject* const &left_boundary_pt,
+      CurvilineGeomObject* const &right_boundary_pt,
+      Vector<double> const &left_coord,
+      Vector<double> const &right_coord)
       : Left_node_pt(left_node_pt),
         Right_node_pt(right_node_pt),
         Left_boundary_pt(left_boundary_pt),
@@ -188,6 +189,29 @@ namespace oomph
       // conditions are less restrictive than previously
       internal_data_pt(Index_of_lagrange_data)->unpin_all();
 
+
+      // [zdec] This full description might be overkill for the code but it will
+      // go in my thesis.
+
+      // We need to keep track of which fvk dofs are already 'used' by Lagrange
+      // constraints.  If dofs 3 and 4 in the right node (dw/dl_1, dw/dl_2) are
+      // the only unpinned dofs between three lagrange constraints (e.g. 3,4,5),
+      // then including all three constraints will result in a three
+      // (consistent) linearly dependent equations and hence a singular matrix.
+      // Therefore, each time we apply a constraint we must 'use' a dof by
+      // marking it as effectively pinned by the lagrange constraint. Generally,
+      // checking we are maximally constraining our duplicated nodes without
+      // introducing linear dependent equations can be a tedious problem (we may
+      // mark dof A as 'used' when choosing between A and B only for the next
+      // constraint to contain only dof A) but we can safely mark the first free
+      // dof provided we choose a constraint and dof order that prioritise
+      // marking dofs which aren't used again (i.e. right dofs).
+
+      // We use a vector of booleans to keep track of dofs that might be reused
+      // (no need to track right dofs which are used once)
+      std::vector<bool> right_data_used(8,false);
+      std::vector<bool> left_data_used(8,false);
+
       // Store each data
       Data* left_data_pt = external_data_pt(Index_of_left_data);
       Data* right_data_pt = external_data_pt(Index_of_right_data);
@@ -196,8 +220,6 @@ namespace oomph
       DenseMatrix<double> jac_of_transform(2,2,0.0);
       Vector<DenseMatrix<double>>
         hess_of_transform(2,DenseMatrix<double>(2,2,0.0));
-      // Vector<DenseMatrix<double>>
-      //   hess_dummy(2,DenseMatrix<double>(2,2,0.0));
       get_jac_and_hess_of_coordinate_transform(jac_of_transform,
                                                hess_of_transform);
 
@@ -209,11 +231,17 @@ namespace oomph
           right_data_pt->is_pinned(i_con);
         bool left_ui_pinned =
           left_data_pt->is_pinned(i_con);
-        // If anything is free continue without doing anything else
-        if(!left_ui_pinned || !right_ui_pinned)
-        {
-          continue;
-        }
+        // If anything is free, mark it as used and continue without doing
+        // anything else
+        if(!right_ui_pinned && !right_data_used[i_con])
+        { right_data_used[i_con]=true; continue; }
+	if(!left_ui_pinned && !left_data_used[i_con])
+	{ left_data_used[i_con]=true; continue; }
+	// ---------------------------------------------------------------------
+	// If we made it here, it is because all dofs in the constraint are
+	// pinned so we need to check the constraint is satisfied manually and
+	// then remove it by pinning the corresponding lagrange multiplier
+
         // Calculate the residual of the constraint
         double constraint_residual =
           right_data_pt->value(i_con) - left_data_pt->value(i_con);
@@ -237,41 +265,39 @@ namespace oomph
         // Get whether each value is pinned
         bool right_ui_pinned =
           right_data_pt->is_pinned(i_con);
+	bool left_u3_pinned =
+          left_data_pt->is_pinned(3);
+        bool left_u4_pinned =
+          left_data_pt->is_pinned(4);
+        // If anything is free, mark it as used and continue without doing
+        // anything else
+        if(!right_ui_pinned && !right_data_used[i_con])
+        { right_data_used[i_con]=true; continue; }
+	if(!left_u3_pinned && !left_data_used[3] )
+	{ left_data_used[3]=true; continue; }
+	if(!left_u4_pinned && !left_data_used[4] )
+	{ left_data_used[4]=true; continue; }
+	// ---------------------------------------------------------------------
+	// If we made it here, it is because all dofs in the constraint are
+	// pinned so we need to check the constraint is satisfied manually and
+	// then remove it by pinning the corresponding lagrange multiplier
 
-	// [zdec] temp check
-	bool left_ui_pinned =
-	  left_data_pt->is_pinned(i_con);
-	if(left_ui_pinned && right_ui_pinned)
-	{
-	  internal_data_pt(Index_of_lagrange_data)->pin(i_con);
-	}
+        // Calculate the residual of the constraint
+        double constraint_residual = right_data_pt->value(i_con);
+        for(unsigned beta = 0; beta < 2; beta++)
+        {
+          constraint_residual +=
+            - left_data_pt->value(3+beta) * jac_of_transform(beta,alpha);
+        }
+        // Check that the constraint is met and we don't have a tear
+        if(constraint_residual > Constraint_tolerance)
+        {
+          throw_unsatisfiable_constraint_error(i_con, constraint_residual);
+        }
 
-	// bool left_u3_pinned =
-        //   left_data_pt->is_pinned(3);
-        // bool left_u4_pinned =
-        //   right_data_pt->is_pinned(4);
-        // // If anything is free continue without doing anything else
-        // if(!right_ui_pinned || !left_u3_pinned || !left_u4_pinned)
-        // {
-        //   continue;
-        // }
-
-        // // Calculate the residual of the constraint
-        // double constraint_residual = right_data_pt->value(i_con);
-        // for(unsigned beta = 0; beta < 2; beta++)
-        // {
-        //   constraint_residual +=
-        //     - left_data_pt->value(3+beta) * jac_of_transform(beta,alpha);
-        // }
-        // // Check that the constraint is met and we don't have a tear
-        // if(constraint_residual > Constraint_tolerance)
-        // {
-        //   throw_unsatisfiable_constraint_error(i_con, constraint_residual);
-        // }
-
-        // // If it is met, we pin the lagrange multiplier that corresponds to
+        // If it is met, we pin the lagrange multiplier that corresponds to
 	// this constraint as it is redundant and results in a zero row/column
-	// internal_data_pt(Index_of_lagrange_data)->pin(i_con);
+	internal_data_pt(Index_of_lagrange_data)->pin(i_con);
       }
 
       // Constraints 5-7 use dofs 5-7 respectively from the right node and
@@ -287,55 +313,57 @@ namespace oomph
           // Get whether each value is pinned
           bool right_ui_pinned =
             right_data_pt->is_pinned(i_con);
+          bool left_u3_pinned =
+            left_data_pt->is_pinned(3);
+          bool left_u4_pinned =
+            right_data_pt->is_pinned(4);
+          bool left_u5_pinned =
+            left_data_pt->is_pinned(5);
+          bool left_u6_pinned =
+            right_data_pt->is_pinned(6);
+          bool left_u7_pinned =
+            left_data_pt->is_pinned(7);
+	  // If anything is free, mark it as used and continue without doing
+	  // anything else
+	  if(!right_ui_pinned && !right_data_used[i_con])
+	  { right_data_used[i_con]=true; continue; }
+	  if(!left_u3_pinned && !left_data_used[3] )
+	  { left_data_used[3]=true; continue; }
+	  if(!left_u4_pinned && !left_data_used[4] )
+	  { left_data_used[4]=true; continue; }
+	  if(!left_u5_pinned && !left_data_used[5] )
+	  { left_data_used[5]=true; continue; }
+	  if(!left_u6_pinned && !left_data_used[6] )
+	  { left_data_used[6]=true; continue; }
+	  if(!left_u7_pinned && !left_data_used[7] )
+	  { left_data_used[7]=true; continue; }
+	  // -------------------------------------------------------------------
+	  // If we made it here, it is because all dofs in the constraint are
+	  // pinned so we need to check the constraint is satisfied manually and
+	  // then remove it by pinning the corresponding lagrange multiplier
 
-	  // [zdec] temp check
-	  bool left_ui_pinned =
-	    left_data_pt->is_pinned(i_con);
-	  if(left_ui_pinned && right_ui_pinned)
-	  {
-	    internal_data_pt(Index_of_lagrange_data)->pin(i_con);
-	  }
-
-        //   bool left_u3_pinned =
-        //     left_data_pt->is_pinned(3);
-        //   bool left_u4_pinned =
-        //     right_data_pt->is_pinned(4);
-        //   bool left_u5_pinned =
-        //     left_data_pt->is_pinned(5);
-        //   bool left_u6_pinned =
-        //     right_data_pt->is_pinned(6);
-        //   bool left_u7_pinned =
-        //     left_data_pt->is_pinned(7);
-        //   // If any of these dofs are unpinned then continue without doing
-        //   // anything else
-        //   if(!right_ui_pinned || !left_u3_pinned || !left_u4_pinned
-        //      || !left_u5_pinned || !left_u6_pinned || !left_u7_pinned)
-        //   {
-        //     continue;
-        //   }
-
-        //   // Calculate the residual of the constraint
-        //   double constraint_residual = right_data_pt->value(i_con);
-        //   for(unsigned gamma = 0; gamma < 2; gamma++)
-        //   {
-        //     constraint_residual +=
-        //       - left_data_pt->value(3+gamma) * hess_of_transform[alpha](beta,gamma);
-        //     for(unsigned delta = 0; delta < 2; delta++)
-        //     {
-        //       constraint_residual +=
-        //         - left_data_pt->value(5+gamma+delta)
-        //         * jac_of_transform(gamma,alpha)
-        //         * jac_of_transform(delta,beta);
-        //     }
-        //   }
-        //   // Check that the constraint is met and we don't have a tear
-        //   if(constraint_residual > Constraint_tolerance)
-        //   {
-        //     throw_unsatisfiable_constraint_error(i_con, constraint_residual);
-        //   }
-        //   // If it is met, we pin the lagrange multiplier that corresponds to
-        //   // this constraint as it is redundant and results in a zero row/column
-        //   internal_data_pt(Index_of_lagrange_data)->pin(i_con);
+          // Calculate the residual of the constraint
+          double constraint_residual = right_data_pt->value(i_con);
+          for(unsigned gamma = 0; gamma < 2; gamma++)
+          {
+            constraint_residual +=
+              - left_data_pt->value(3+gamma) * hess_of_transform[alpha](beta,gamma);
+            for(unsigned delta = 0; delta < 2; delta++)
+            {
+              constraint_residual +=
+                - left_data_pt->value(5+gamma+delta)
+                * jac_of_transform(gamma,alpha)
+                * jac_of_transform(delta,beta);
+            }
+          }
+          // Check that the constraint is met and we don't have a tear
+          if(constraint_residual > Constraint_tolerance)
+          {
+            throw_unsatisfiable_constraint_error(i_con, constraint_residual);
+          }
+          // If it is met, we pin the lagrange multiplier that corresponds to
+          // this constraint as it is redundant and results in a zero row/column
+          internal_data_pt(Index_of_lagrange_data)->pin(i_con);
         }
       }
     } // End validate_and_pin_redundant_constraints()
@@ -368,8 +396,9 @@ namespace oomph
 
 
     /// Function to calculate Jacobian and Hessian of the coordinate mapping
-    void get_jac_and_hess_of_coordinate_transform(DenseMatrix<double> &jac_of_transform,
-                                                  Vector<DenseMatrix<double>> &hess_of_transform)
+    void get_jac_and_hess_of_coordinate_transform(
+      DenseMatrix<double> &jac_of_transform,
+      Vector<DenseMatrix<double>> &hess_of_transform)
     {
       //----------------------------------------------------------------------
       // We need the parametrisations either side of the vertex which define
@@ -773,7 +802,7 @@ namespace oomph
         if(internal_eqn_number>=0)
         {
           // || Add constraining residual ||
-          residuals[i_dof] +=
+          residuals[internal_eqn_number] +=
             (right_value[i_dof] - left_value[i_dof]);
           // [zdec] WHAT IF BOTH ARE PINNED?
           // More generally, what if we have no dofs to satisfy our constraints?
@@ -835,7 +864,10 @@ namespace oomph
 		     << beta << " "
 		     << gamma << " "
 		     << delta << ": D2wJJ += "
-		     << left_value[5+gamma+delta] << " * " << jac_of_transform(gamma,alpha) << " * " << jac_of_transform(delta,beta) << " = " << D2wJJ[alpha+beta] << endl;
+		     << left_value[5+gamma+delta] << " * "
+		     << jac_of_transform(gamma,alpha) << " * "
+		     << jac_of_transform(delta,beta) << " = "
+		     << D2wJJ[alpha+beta] << endl;
               }
               // Add contributions to D(w)*H
               DwH[alpha+beta] +=
@@ -845,7 +877,9 @@ namespace oomph
 		   << beta << " "
 		   << gamma << " "
 		   << ": DwH += "
-		   << left_value[3+gamma] << " * " << hess_of_transform[gamma](alpha,beta) << " = " << DwH[alpha+beta] << endl;
+		   << left_value[3+gamma] << " * "
+		   << hess_of_transform[gamma](alpha,beta) << " = "
+		   << DwH[alpha+beta] << endl;
             }
 	    // [zdec] debug
 	    cout << alpha << " "
@@ -1084,16 +1118,16 @@ namespace Parameters
   //  unsigned Problem_case = ; // Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
 
   /// Upper ellipse x span
-  double A1 = 1.0;
+  double A1 = 0.5;
 
   /// Upper ellipse y span
-  double B1 = 2.0;
+  double B1 = 1.0;
 
   /// Lower ellipse x span
-  double A2 = 10.0;
+  double A2 = 0.55;
 
   /// Lower ellipse y span
-  double B2 = 1.0;
+  double B2 = 0.5;
 
   /// Char array containing the condition on each boundary. Character array
   /// index corresponds to boundary enumeration and the entry to the contition
@@ -1448,7 +1482,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   //First bit
   double zeta_start = theta1;
   double zeta_end = -theta1;
-  unsigned nsegment = (int)(4.0*(theta2-theta1)/sqrt(Element_area))+2;
+  unsigned nsegment = (int)(0.5*(theta2-theta1)/sqrt(Element_area))+2;
 
   Outer_curvilinear_boundary_pt.resize(2);
   Outer_curvilinear_boundary_pt[0] =
@@ -1528,7 +1562,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   }
 
   // Add extra nodes at boundaries and constrain the dofs there.
-  // duplicate_corner_nodes();
+  duplicate_corner_nodes();
 
   // [debug] Print the number of boundaries each node is on (there should only
   // be 2 nodes on 2 boundaries)
@@ -1652,19 +1686,9 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   unsigned n_el = Constraint_mesh_pt->nelement();
   for(unsigned i_el = 0; i_el < n_el; i_el++)
   {
-  //   dynamic_cast<DuplicateNodeConstraintElement*>
-  //     (Constraint_mesh_pt->element_pt(i_el))
-  //     ->validate_and_pin_redundant_constraints();
-    for(unsigned i_dof = 0; i_dof < 8; i_dof++)
-    {
-      if(i_dof!=5 && i_dof!=6)
-      {
-        dynamic_cast<DuplicateNodeConstraintElement*>(
-          Constraint_mesh_pt->element_pt(i_el))
-          ->internal_data_pt(0)
-          ->pin(i_dof);
-      }
-    }
+    dynamic_cast<DuplicateNodeConstraintElement*>
+      (Constraint_mesh_pt->element_pt(i_el))
+      ->validate_and_pin_redundant_constraints();
   }
 
   // Complete the build of all elements so they are fully functional
@@ -1697,7 +1721,7 @@ template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 {
   // Set the boundary conditions
-  unsigned n_bound = 2;
+  unsigned n_bound = 1;
   for(unsigned b=0;b<n_bound;b++)
   {
     const unsigned n_b_element = Bulk_mesh_pt->nboundary_element(b);
@@ -1713,7 +1737,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
       el_pt->fix_in_plane_displacement_dof(0,b,Parameters::get_null_fct);
       el_pt->fix_in_plane_displacement_dof(1,b,Parameters::get_null_fct);
 
-      // Resting pin so set [0, 2, 5]
+      // Resting pin: set [0, 2, 5]
+      // Clamp: set [0, 1, 2, 4, 5]
       // z-displacement
       el_pt->fix_out_of_plane_displacement_dof(0,b,Parameters::get_null_fct);
       el_pt->fix_out_of_plane_displacement_dof(1,b,Parameters::get_null_fct);
@@ -1922,7 +1947,7 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
                    << node_pt->position(0) << "," << node_pt->position(1) << ")"
                    << std::endl;
         old_node_pt = node_pt;
-        break;
+	break;
       }
     }
 
@@ -1967,7 +1992,8 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
     // Copy the position and other info from the old node into the new node
     // [debug]
     oomph_info << "About to copy node data" << std::endl;
-    new_node_pt->copy(old_node_pt);
+    new_node_pt->x(0)=old_node_pt->x(0);
+    new_node_pt->x(1)=old_node_pt->x(1);
     oomph_info << "Copied node data" << std::endl;
     // Then we add this node to the mesh
     Bulk_mesh_pt->add_node_pt(new_node_pt);
@@ -2070,7 +2096,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
         // normal / tangent vectors to the element
         el_pt->
           rotated_boundary_helper_pt()->
-          add_nodal_boundary_parametrisation(boundary_node,
+          set_nodal_boundary_parametrisation(boundary_node,
                                              boundary_coordinate_of_node,
                                              Parametric_curve_pt[b]);
       }
@@ -2155,7 +2181,7 @@ int main(int argc, char **argv)
                                              &Parameters::Eta);
 
   // Element Area
-  double element_area=0.05;
+  double element_area=0.01;
   CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
 
 
@@ -2171,7 +2197,7 @@ int main(int argc, char **argv)
 
 
   // Alias the elements we use because they are long and repetative
-  typedef FoepplVonKarmanC1CurvableBellElement<4> FvKelement;
+  typedef FoepplVonKarmanC1CurvableBellElement<2> FvKelement;
 
 
   // Build problem
@@ -2180,9 +2206,9 @@ int main(int argc, char **argv)
   UnstructuredFvKProblem<FvKelement>
     problem(element_area);
 
-  double dp_mag=0.5;
+  double dp_mag=10.0;
   double dt_mag=0.00;
-  unsigned n_step=2;
+  unsigned n_step=1;
 
   // Doc initial
   problem.doc_solution();
@@ -2208,7 +2234,7 @@ int main(int argc, char **argv)
           {
             node_pt->set_value(2+i_dof,1.0);
           }
-          // Set last dof to 0.0
+          // Set previous dof to 0.0
           if(i_dof>0)
           {
             node_pt->set_value(2+i_dof-1,0.0);
@@ -2219,26 +2245,26 @@ int main(int argc, char **argv)
     problem.doc_solution();
   }
 
-  cout << "Zero state:" << std::endl;
-  // Get res and jac for zero state
+  // cout << "Zero state:" << std::endl;
+  // // Get res and jac for zero state
   LinearAlgebraDistribution* dist = problem.dof_distribution_pt();
-  DoubleVector res(dist,0.0);
-  CRDoubleMatrix jac(dist);
-  problem.get_jacobian(res,jac);
-  res.output("residual_zero.txt");
-  jac.sparse_indexed_output("cr_jacobian_zero.txt");
+  // DoubleVector res(dist,0.0);
+  // CRDoubleMatrix jac(dist);
+  // problem.get_jacobian(res,jac);
+  // res.output("residual_zero.txt");
+  // jac.sparse_indexed_output("cr_jacobian_zero.txt");
 
-  cout << "Random state:" << std::endl;
-  // Get res and jac for 'random' state
-  unsigned n_dofs = problem.ndof();
-  for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
-  {
-    *(problem.dof_pt(i_dof)) += 0.0001 * sin(i_dof+1.0/Pi);
-  }
+  // cout << "Random state:" << std::endl;
+  // // Get res and jac for 'random' state
+  // unsigned n_dofs = problem.ndof();
+  // for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
+  // {
+  //   *(problem.dof_pt(i_dof)) += 0.0001 * sin(i_dof+1.0/Pi);
+  // }
 
-  problem.get_jacobian(res,jac);
-  res.output("residual_rand.txt");
-  jac.sparse_indexed_output("cr_jacobian_rand.txt");
+  // problem.get_jacobian(res,jac);
+  // res.output("residual_rand.txt");
+  // jac.sparse_indexed_output("cr_jacobian_rand.txt");
 
   // // Get res and jac of eigenmodes read from csv
   // io::CSVReader<4> in("eigmodes.csv");
@@ -2301,7 +2327,7 @@ int main(int argc, char **argv)
 
   cout << "Solve:" << std::endl;
   // Reset the dofs to zero
-  for(unsigned i_dof = 0; i_dof < n_dofs; i_dof++)
+  for(unsigned i_dof = 0; i_dof < n_dof; i_dof++)
   {
     *(problem.dof_pt(i_dof)) = 0.0;
   }

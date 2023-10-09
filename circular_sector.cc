@@ -75,7 +75,7 @@ namespace Parameters
 {
   /// Opening angle of the domain corner
   double Alpha = Pi/4.0;
-  
+
   /// The plate thickness
   double Thickness = 0.01;
 
@@ -93,118 +93,19 @@ namespace Parameters
 
   /// Magnitude of pressure
   double P_mag = 10.0;
- 
+
   //                     PARAMETRIC BOUNDARY DEFINITIONS
-  /// Here we create the geom objects for the Parametric Boundary Definition
-  /// (needed to update boundary elements to curved)
-  CurvilineCircleTop parametric_arc;
+  // Here we create the geom objects for the Parametric Boundary Definition
+  // (needed to update boundary elements to curved)
 
+  /// Curved arc of sector
+  CurvilineCircleTop Circular_arc;
 
-  /// The type of function pointer that set_up_rotated_dofs() expects
-  typedef void Norm_and_tan_func(const Vector<double>&,
-				 Vector<double>&,
-				 Vector<double>&,
-				 DenseMatrix<double>&,
-				 DenseMatrix<double>&);
-  
-  /// The normal and tangential directions. We need the derivatives so we can form
-  /// The Hessian and the Jacobian of the rotation
-  void get_normal_and_tangent_straight_boundary_0(const Vector<double>& x,
-						  Vector<double>& n,
-						  Vector<double>& t,
-						  DenseMatrix<double>& dn,
-						  DenseMatrix<double>& dt)
-  {
-    // Endpoints
-    Vector<double> x0(2, 0.0);
-    Vector<double> x1(2, 0.0);
-    x1[0] = 1.0;
+  /// The lower (x-axis) radius
+  CurvilineLine Lower_line(0.0, false);
 
-    double dx = x1[0] - x0[0];
-    double dy = x1[1] - x0[1];
-    double mag = sqrt(dx*dx + dy*dy);
-   
-    // Fill in the normal and derivatives of the normal
-    n[0] =-dy/mag;
-    n[1] = dx/mag;
-
-    // Fill in the tangent and derivatives of the tangent
-    t[0] = dx/mag;
-    t[1] = dy/mag;
-
-    // Zero derivatives for straight lines
-    dn(0,0) = 0.0;
-    dn(1,0) = 0.0;
-    dn(0,1) = 0.0;
-    dn(1,1) = 0.0;
-
-    dt = dn;
-  }
-
-  /// The normal and tangential directions. We need the derivatives so we can form
-  /// The Hessian and the Jacobian of the rotation
-  void get_normal_and_tangent_straight_boundary_1(const Vector<double>& x,
-						  Vector<double>& n,
-						  Vector<double>& t,
-						  DenseMatrix<double>& dn,
-						  DenseMatrix<double>& dt)
-  {
-    // Endpoints
-    Vector<double> x0(2, 0.0);
-    Vector<double> x1(2, 0.0);
-    x0[0] = cos(Alpha);
-    x0[1] = sin(Alpha);
-
-    double dx = x1[0] - x0[0];
-    double dy = x1[1] - x0[1];
-    double mag = sqrt(dx*dx + dy*dy);
-   
-    // Fill in the normal and derivatives of the normal
-    n[0] =-dy/mag;
-    n[1] = dx/mag;
-
-    // Fill in the tangent and derivatives of the tangent
-    t[0] = dx/mag;
-    t[1] = dy/mag;
-
-    // Zero derivatives for straight lines
-    dn(0,0) = 0.0;
-    dn(1,0) = 0.0;
-    dn(0,1) = 0.0;
-    dn(1,1) = 0.0;
-
-    dt = dn;
-  }
-  
-  /// The normal and tangential directions. We need the derivatives so we can form
-  /// The Hessian and the Jacobian of the rotation
-  void get_normal_and_tangent_circular_arc(const Vector<double>& x,
-					   Vector<double>& n,
-					   Vector<double>& t,
-					   DenseMatrix<double>& dn,
-					   DenseMatrix<double>& dt)
-  {
-    double mag = sqrt(x[0]*x[0] + x[1]*x[1]);
-  
-    // Fill in the normal and derivatives of the normal
-    n[0] = x[0]/mag;
-    n[1] = x[1]/mag;
-
-    // The (x,y) derivatives of the (x,y) components
-    dn(0,0) = x[1]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-    dn(1,0) =-x[1]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-    dn(0,1) =-x[0]*x[1] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-    dn(1,1) = x[0]*x[0] * pow(x[0]*x[0]+x[1]*x[1],-1.5);
-
-    // Fill in the tangent and derivatives of the tangent
-    t[0] =-x[1]/mag;
-    t[1] = x[0]/mag;
-
-    dt(0,0) =-dn(1,0);
-    dt(1,0) = dn(0,0);
-    dt(0,1) =-dn(1,1);
-    dt(1,1) = dn(0,1);
-  }
+  /// The upper radial line
+  CurvilineLine Upper_line(Alpha, true);
 
   //                           PROBLEM DEFINITIONS
   /// Assigns the value of pressure depending on the position (x,y)
@@ -750,7 +651,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound, Mesh* const &bulk_mesh_pt
   switch (ibound)
     {
     case Circular_arc_bnum:
-      parametric_curve_pt = &Parameters::parametric_arc;
+      parametric_curve_pt = &Parameters::Circular_arc;
       break;
     default:
       throw OomphLibError("Unexpected boundary number. Please add additional \
@@ -828,61 +729,70 @@ as the edge is traversed anti-clockwise.",
 
 
 
-//==============================================================================
+//======================================================================
 /// Function to set up rotated nodes on the boundary: necessary if we want to set
 /// up physical boundary conditions on a curved boundary with Hermite type dofs.
 /// For example if we know w(n,t) = f(t) (where n and t are the
 /// normal and tangent to a boundary) we ALSO know dw/dt and d2w/dt2.
 /// NB no rotation is needed if the edges are completely free!
-/// begin rotate_edge_degrees_of_freedom
-//==============================================================================
+//======================================================================
 template <class ELEMENT>
-void UnstructuredFvKProblem<ELEMENT>::
-rotate_edge_degrees_of_freedom( Mesh* const &bulk_mesh_pt)
+void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
 {
-  // Store the edge parametrisations in a vector
-  Vector<Parameters::Norm_and_tan_func*> boundary_parametrisation_pt(3);
-  boundary_parametrisation_pt[Circular_arc_bnum] =
-    &Parameters::get_normal_and_tangent_circular_arc;
-  boundary_parametrisation_pt[Straight_edge_0_bnum] =
-    &Parameters::get_normal_and_tangent_straight_boundary_0;
-  boundary_parametrisation_pt[Straight_edge_1_bnum] =
-    &Parameters::get_normal_and_tangent_straight_boundary_1;
+  // Get the number of boundaries
+  unsigned n_bound = 3;
 
-  // Loop over the boundaries
-  unsigned n_boundaries = 3;
-  for(unsigned b=0; b<n_boundaries; b++)
+  // Loop over the bulk elements
+  unsigned n_element = Bulk_mesh_pt-> nelement();
+  for(unsigned e=0; e<n_element; e++)
+  {
+    // Get pointer to bulk element adjacent
+    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
+
+    // [zdec] debug
+    oomph_info << "In element " << e << " (" << el_pt << ")" << std::endl;
+
+    // Loop over each boundary and add the boundary parametrisation to the
+    // relevant nodes' boundary data
+    for(unsigned b=0; b<n_bound; b++)
     {
-      // Loop over the bulk elements
-      unsigned n_element = bulk_mesh_pt-> nelement();
-      for(unsigned e=0; e<n_element; e++)
-	{
-	  // Get pointer to bulk element
-	  ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
 
-	  // Calculate which nodes are on boundary b
-	  const unsigned nnode=3;
+      // Calculate nodes on the relevant boundaries
+      const unsigned nnode=3;
+      // Count the number of boundary nodes on external boundaries
+      Vector<unsigned> boundary_node;
+      // Store the boundary coordinates of nodes on the boundaries
+      Vector<double> boundary_coordinate_of_node;
+      for (unsigned n=0; n<nnode;++n)
+      {
+        // If on external boundary b
+        if (el_pt->node_pt(n)->is_on_boundary(b))
+        {
+          boundary_node.push_back(n);
+          double coord = Parameters::Parametric_curve_pt[b]
+            ->get_zeta(el_pt->node_pt(n)->position());
+          boundary_coordinate_of_node.push_back(coord);
+        }
+      }
 
-	  // Count the number of boundary nodes on boundary b
-	  Vector<unsigned> boundary_nodes;
-	  for (unsigned n=0; n<nnode;++n)
-	    {
-	      // Rotate nodes if on boundary b
-	      if (el_pt->node_pt(n)->is_on_boundary(b))
-		{ boundary_nodes.push_back(n); }
-	    }
-
-	  // If the element has nodes on the boundary, rotate the Hermite dofs
-	  if(!boundary_nodes.empty())
-	    {
-	      // Rotate the nodes by passing the index of the nodes and the
-	      // normal / tangent vectors to the element
-	      el_pt->set_up_rotated_dofs(boundary_nodes.size(),
-					 boundary_nodes,
-					 boundary_parametrisation_pt[b]);
-	    }
-	} // End loop over elements [e]
-    } // End loop over boundaries [b]
+      // If the element has nodes on the boundary, rotate the Hermite dofs
+      if(!boundary_node.empty())
+      {
+        // [zdec] debug
+        oomph_info << " Nodes ";
+        for(unsigned n: boundary_node)
+        {oomph_info << n << " "; }
+        oomph_info << " are on boundary " << b << std::endl;
+        // Rotate the nodes by passing the index of the nodes and the
+        // normal / tangent vectors to the element
+        el_pt->
+          rotated_boundary_helper_pt()->
+          set_nodal_boundary_parametrisation(boundary_node,
+                                             boundary_coordinate_of_node,
+                                             Parameters::Parametric_curve_pt[b]);
+      }
+    }
+  }
 }// end rotate_edge_degrees_of_freedom
 
 
