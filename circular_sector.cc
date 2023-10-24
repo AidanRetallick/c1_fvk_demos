@@ -27,13 +27,14 @@
 //LIC// The authors may be contacted at oomph-lib@maths.man.ac.uk.
 //LIC//
 //LIC//====================================================================
-#include <fenv.h>
-//Generic routines
-#include "generic.h"
 
+// Floating point environment
+#include <fenv.h>
+
+// Generic oomph-lib routines
+#include "generic.h"
 // The equations
 #include "c1_foeppl_von_karman.h"
-
 // The mesh
 #include "meshes/triangle_mesh.h"
 
@@ -107,6 +108,10 @@ namespace Parameters
   /// The upper radial line
   CurvilineLine Upper_line(Alpha, true);
 
+  Vector<CurvilineGeomObject*> Parametric_curve_pt = { &Lower_line,
+    &Circular_arc,
+    &Upper_line };
+
   //                           PROBLEM DEFINITIONS
   /// Assigns the value of pressure depending on the position (x,y)
   void get_pressure(const Vector<double>& x, double& pressure)
@@ -148,28 +153,31 @@ namespace Parameters
     // Do nothing -> no exact solution in this case
   }
 
-  //--------------------------------------------------------------------- 
+  //---------------------------------------------------------------------
   // Functions to assign boundary conditions
   // (e.g. sin along arc 0<theta<Alpha)
 
   /// Sin along circular arc for w BC
   void get_w_along_arc(const Vector<double>& x, double& value)
   {
-    value = Boundary_amp * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
+    value = Boundary_amp
+      * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
   }
- 
+
   /// Cos along circular arc for dw/dt BC
   void get_dwdt_along_arc(const Vector<double>& x, double& value)
   {
-    value = 2.0*Pi/Alpha * Boundary_amp * cos( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
+    value = 2.0*Pi/Alpha * Boundary_amp
+      * cos( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
   }
 
   /// -Sin along circular arc for d2w/dt2 BC
   void get_d2wdt2_along_arc(const Vector<double>& x, double& value)
   {
-    value = -pow(2.0*Pi/Alpha,2.0) * Boundary_amp * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
+    value = -pow(2.0*Pi/Alpha,2.0) * Boundary_amp
+      * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
   }
- 
+
   /// Null function for any zero (homogenous) BCs
   void get_null_fct(const Vector<double>& x, double& value)
   {
@@ -199,7 +207,7 @@ public:
   ~UnstructuredFvKProblem()
   {
     Trace_file.close();
-    delete (Surface_mesh_pt);
+    delete (Constraint_mesh_pt);
     delete (Bulk_mesh_pt);
     // Clean up memory
     delete Boundary_pt;
@@ -211,6 +219,9 @@ public:
 
   /// Setup and build the mesh
   void build_mesh();
+
+  /// Duplicate corner nodes and create constraint elements at those corners
+  void duplicate_corner_nodes();
 
   /// Update after solve (empty)
   void actions_after_newton_solve()
@@ -228,7 +239,7 @@ public:
     // Reapply boundary conditions
     apply_boundary_conditions();
   }
- 
+
   /// Doc the solution
   void doc_solution(const std::string& comment="");
 
@@ -248,7 +259,7 @@ private:
   // This is the data used to set-up the mesh, we need to store the pointers
   // HERE otherwise we will not be able to clean up the memory once we have
   // finished the problem.
-  /// Parametrised boundary geometric object 
+  /// Parametrised boundary geometric object
   Ellipse* Outer_boundary_ellipse_pt;
   /// The outer boundary component curves
   Vector<TriangleMeshCurveSection*> Outer_boundary_curvilines_pt;
@@ -261,7 +272,7 @@ private:
     // Curved Edges need to be upgraded after the rebuild
     upgrade_edge_elements_to_curve(Circular_arc_bnum, Bulk_mesh_pt);
     // Rotate degrees of freedom
-    rotate_edge_degrees_of_freedom(Bulk_mesh_pt);
+    rotate_edge_degrees_of_freedom();
     // Make the problem fully functional
     complete_problem_setup();
     // Apply any boundary conditions
@@ -284,15 +295,15 @@ private:
 
   /// Keep track of boundary ids
   enum
-    {
-     Straight_edge_0_bnum = 0,
-     Circular_arc_bnum = 1,
-     Straight_edge_1_bnum = 2
-    };
+  {
+    Straight_edge_0_bnum = 0,
+    Circular_arc_bnum = 1,
+    Straight_edge_1_bnum = 2
+  };
 
   /// Maximum element area size
   double Element_area;
- 
+
   /// Flag to turn the elements into linear beinding
   bool Solve_linear_bending;
 
@@ -303,7 +314,7 @@ private:
 
   /// Loop over all edge elements and rotate the Hermite degrees of freedom
   /// to be in the directions of the two in-plane vectors specified in Parameters
-  void rotate_edge_degrees_of_freedom(Mesh* const &bulk_mesh_pt);
+  void rotate_edge_degrees_of_freedom();
 
   /// Delete traction elements and wipe the surface mesh
   void delete_traction_elements(Mesh* const &surface_mesh_pt);
@@ -312,7 +323,7 @@ private:
   TriangleMesh<ELEMENT>* Bulk_mesh_pt;
 
   /// Pointer to "surface" mesh
-  Mesh* Surface_mesh_pt;
+  Mesh* Constraint_mesh_pt;
 
 }; // end_of_problem_class
 
@@ -334,7 +345,7 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
   upgrade_edge_elements_to_curve(Circular_arc_bnum, Bulk_mesh_pt);
 
   // Rotate degrees of freedom
-  rotate_edge_degrees_of_freedom(Bulk_mesh_pt);
+  rotate_edge_degrees_of_freedom();
 
   // Store number of bulk elements
   complete_problem_setup();
@@ -345,7 +356,13 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
 
   oomph_info << "Number of equations: "
 	     << assign_eqn_numbers() << '\n';
+
+  // Doc the equatiuons
+  describe_dofs();
+
 } // end Constructor
+
+
 
 /// Set up and build the mesh
 template<class ELEMENT>
@@ -353,7 +370,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 {
   Vector<double> zeta(1);
   Vector<double> posn(2);
- 
+
   // Opening angle
   double alpha = Parameters::Alpha;
 
@@ -379,17 +396,17 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   endpoints[1] = arc_start;
   Outer_boundary_curvilines_pt[Straight_edge_0_bnum] =
     new TriangleMeshPolyLine(endpoints, Straight_edge_0_bnum);
- 
+
   // Straight boundary 1 (upper)
   endpoints[0] = arc_end;
   endpoints[1] = corner;
   Outer_boundary_curvilines_pt[Straight_edge_1_bnum] =
     new TriangleMeshPolyLine(endpoints, Straight_edge_1_bnum);
- 
+
   // Curved arc boundary
   double zeta_start = 0.0;
   double zeta_end = alpha;
-  unsigned nsegment = (int)(Pi/sqrt(Element_area));
+  unsigned nsegment = 1.0; //(int)(Pi/sqrt(Element_area));
   Outer_boundary_curvilines_pt[Circular_arc_bnum] =
     new TriangleMeshCurviLine(Outer_boundary_ellipse_pt, zeta_start,
 			      zeta_end, nsegment, Circular_arc_bnum);
@@ -397,30 +414,152 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   // Form closed curve from components
   Boundary_pt =
     new TriangleMeshClosedCurve(Outer_boundary_curvilines_pt);
- 
- 
+
+
   //Create the mesh
   //---------------
   //Create mesh parameters object
   TriangleMeshParameters mesh_parameters(Boundary_pt);
- 
+
   mesh_parameters.element_area() = Element_area;
-  
+
   // Build an assign bulk mesh
   Bulk_mesh_pt=new TriangleMesh<ELEMENT>(mesh_parameters);
- 
-  // Create "surface mesh" that will contain only the prescribed-traction
-  // elements. The constructor creates the mesh without adding any nodes
-  // elements etc.
-  Surface_mesh_pt =  new Mesh;
- 
+  Bulk_mesh_pt->setup_boundary_element_info();
+
+  // Build mesh to contain constraint elements
+  Constraint_mesh_pt = new Mesh();
+
+  // Split elements that have two boundary edges
+  TimeStepper* time_stepper_pt = Bulk_mesh_pt->Time_stepper_pt;
+  Bulk_mesh_pt->
+    template split_elements_with_multiple_boundary_edges<ELEMENT>(time_stepper_pt);
+
+  // Add extra nodes at boundaries and constrain the dofs there.
+  duplicate_corner_nodes();
+
   //Add two submeshes to problem
   add_sub_mesh(Bulk_mesh_pt);
-  add_sub_mesh(Surface_mesh_pt);
- 
+  add_sub_mesh(Constraint_mesh_pt);
+
   // Combine submeshes into a single Mesh
   build_global_mesh();
+
 }// end build_mesh
+
+
+
+//==============================================================================
+/// Duplicate nodes at corners in order to properly apply boundary
+/// conditions from each edge. Also adds (8) Lagrange multiplier dofs to the
+/// problem in order to constrain continuous interpolation here across its (8)
+/// vertex dofs. (Note "corner" here refers to the meeting point of any two
+/// sub-boundaries in the closed external boundary)
+//==============================================================================
+template <class ELEMENT>
+void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
+{
+  // Loop over the sections of the external boundary
+  unsigned n_bound = Bulk_mesh_pt->nboundary();
+  for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
+  {
+    // Store the index of the next boundary
+    unsigned ip1_bound = (i_bound+1)%n_bound;
+    // Storage for node and el pts at the boundary vertex
+    Node* old_node_pt = 0;
+    Node* new_node_pt = 0;
+    // FiniteElement* left_element_pt = 0;
+    FiniteElement* right_element_pt = 0;
+
+    // To find the node between boundaries i and i+1, we loop over all nodes on
+    // boundary i until we find the one that is also on i+1, we then loop over
+    // all boundary elements on i and i+1 until we find the elements that sit
+    // either side of the corner. (there might be a smarter way but this was the
+    // first idea I had -- Aidan)
+
+    //----------------------------------------------------------------------
+    // First, find corner the node
+    unsigned n_b_node = Bulk_mesh_pt->nboundary_node(i_bound);
+    for(unsigned i_b_node = 0; i_b_node < n_b_node; i_b_node++)
+    {
+      // Store the node we are checking
+      Node* node_pt = Bulk_mesh_pt->boundary_node_pt(i_bound,i_b_node);
+
+      // If it is on the next boundary we have found the corner node
+      if(node_pt->is_on_boundary(ip1_bound))
+      {
+        // [zdec] debug
+        oomph_info << "Found a corner node at " << std::endl << "  ("
+                   << node_pt->position(0) << "," << node_pt->position(1) << ")"
+                   << std::endl;
+        old_node_pt = node_pt;
+	break;
+      }
+    }
+
+    //----------------------------------------------------------------------
+    // Find the right (i+1th boundary) side element
+    unsigned n_b_el = Bulk_mesh_pt->nboundary_element(ip1_bound);
+    for (unsigned i_b_el = 0; i_b_el < n_b_el; i_b_el++)
+    {
+      // Get the element pointer
+      FiniteElement* el_pt = Bulk_mesh_pt->boundary_element_pt(ip1_bound, i_b_el);
+      // If the corner node pt is in the element we have found the right
+      // element
+      if (el_pt->get_node_number(old_node_pt) != -1)
+      {
+        right_element_pt = el_pt;
+        break;
+      }
+    }
+
+    //----------------------------------------------------------------------
+    // Now we need to create a new node and substitute the right elements
+    // old corner node for this new one
+    new_node_pt = right_element_pt->construct_boundary_node(
+      right_element_pt->get_node_number(old_node_pt));
+    // Copy the position and other info from the old node into the new node
+    // [debug]
+    oomph_info << "About to copy node data" << std::endl;
+    new_node_pt->x(0)=old_node_pt->x(0);
+    new_node_pt->x(1)=old_node_pt->x(1);
+    oomph_info << "Copied node data" << std::endl;
+    // Then we add this node to the mesh
+    Bulk_mesh_pt->add_node_pt(new_node_pt);
+    // Then replace the old node for the new one on the right boundary
+    Bulk_mesh_pt->remove_boundary_node(ip1_bound,old_node_pt);
+    Bulk_mesh_pt->add_boundary_node(ip1_bound,new_node_pt);
+
+    //----------------------------------------------------------------------
+    // The final job is to constrain this duplication using the specialised
+    // Lagrange multiplier elements which enforce equality of displacement and
+    // its derivatives either side of this corner.
+    CurvilineGeomObject* left_parametrisation_pt =
+      Parameters::Parametric_curve_pt[i_bound];
+    CurvilineGeomObject* right_parametrisation_pt =
+      Parameters::Parametric_curve_pt[ip1_bound];
+
+    // Get the coordinates on each node on their respective boundaries
+    Vector<double> left_boundary_coordinate =
+      {left_parametrisation_pt->get_zeta(old_node_pt->position())};
+    Vector<double> right_boundary_coordinate =
+      {right_parametrisation_pt->get_zeta(new_node_pt->position())};
+
+    // Create the constraining element
+    DuplicateNodeConstraintElement* constraint_element_pt =
+      new DuplicateNodeConstraintElement(old_node_pt,
+                                         new_node_pt,
+                                         left_parametrisation_pt,
+                                         right_parametrisation_pt,
+                                         left_boundary_coordinate,
+                                         right_boundary_coordinate);
+
+    // Add the constraining element to the mesh
+    Constraint_mesh_pt->add_element_pt(constraint_element_pt);
+  }
+}
+
+
 
 
 
@@ -434,34 +573,43 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   // Complete the build of all elements so they are fully functional
   unsigned n_element = Bulk_mesh_pt->nelement();
   for(unsigned e=0;e<n_element;e++)
-    {
-      // Upcast from GeneralisedElement to the present element
-      ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
+  {
+    // Upcast from GeneralisedElement to the present element
+    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->element_pt(e));
 
-      //Set the pressure function pointers and the physical constants
-      el_pt->pressure_fct_pt() = &Parameters::get_pressure;
-      el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
-      // There is no error metric in this case
-      el_pt->error_metric_fct_pt() = &Parameters::axiasymmetry_metric;
-      el_pt->nu_pt() = &Parameters::Nu;
-      if(Solve_linear_bending)
-	{
-	  el_pt->eta_pt() = &Parameters::Eta_linear;
-	}
-      else
-	{
-	  el_pt->eta_pt() = &Parameters::Eta;
-	}
+    //Set the pressure function pointers and the physical constants
+    el_pt->pressure_fct_pt() = &Parameters::get_pressure;
+    el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
+    // There is no error metric in this case
+    el_pt->error_metric_fct_pt() = &Parameters::axiasymmetry_metric;
+    el_pt->nu_pt() = &Parameters::Nu;
+    if(Solve_linear_bending)
+    {
+      el_pt->eta_pt() = &Parameters::Eta_linear;
     }
- 
+    else
+    {
+      el_pt->eta_pt() = &Parameters::Eta;
+    }
+  }
+
   // Set the boundary conditions
   apply_boundary_conditions();
 
   // Pin in-plane displacements throughout the bulk
   if(Solve_linear_bending)
-    {
-      pin_all_in_plane_displacements();
-    }
+  {
+    pin_all_in_plane_displacements();
+  }
+
+  // Update the corner constraintes based on boundary conditions
+  unsigned n_el = Constraint_mesh_pt->nelement();
+  for(unsigned i_el = 0; i_el < n_el; i_el++)
+  {
+    dynamic_cast<DuplicateNodeConstraintElement*>
+      (Constraint_mesh_pt->element_pt(i_el))
+      ->validate_and_pin_redundant_constraints();
+  }
 }
 
 
@@ -474,7 +622,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 {
   //----------------------------------------------------------------------------
   // Sets of possible boundary conditions
- 
+
   // The free boundary condition is completely unpinned
   static const Vector<unsigned> free{};
 
@@ -485,7 +633,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   static const Vector<unsigned> pin_un_dofs{0};
   static const Vector<unsigned> pin_ut_dofs{1};
   static const Vector<unsigned> pin_inplane_dofs{0,1};
-  
+
   // Out-of-plane dofs:
   // |  0  |  1  |  2  |  3  |  4  |  5  |
   // |  w  | w_n | w_t | w_nn| w_nt| w_tt|
@@ -500,9 +648,9 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   Vector<unsigned> straight_edge_1_pinned_u_dofs = pin_inplane_dofs;
   Vector<unsigned> circular_arc_pinned_u_dofs = pin_inplane_dofs;
   Vector<unsigned> straight_edge_0_pinned_w_dofs = resting_pin_dofs;
-  Vector<unsigned> straight_edge_1_pinned_w_dofs = resting_pin_dofs;
+  Vector<unsigned> straight_edge_1_pinned_w_dofs = free;//resting_pin_dofs;
   // Vector<unsigned> circular_arc_pinned_w_dofs = true_clamp_dofs;
- 
+
   // Allocate storage for the number of elements and dofs
   unsigned n_b_element = 0;
   unsigned n_pinned_u_dofs = 0;
@@ -513,113 +661,113 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   n_pinned_u_dofs = circular_arc_pinned_u_dofs.size();
   // n_pinned_w_dofs = circular_arc_pinned_w_dofs.size();
   for(unsigned e=0;e<n_b_element;e++)
-    {
-      // Get pointer to bulk element adjacent to curved arc
-      ELEMENT* el_pt =
-	dynamic_cast<ELEMENT*>(Bulk_mesh_pt
-			       ->boundary_element_pt(Circular_arc_bnum,e));
+  {
+    // Get pointer to bulk element adjacent to curved arc
+    ELEMENT* el_pt =
+      dynamic_cast<ELEMENT*>(Bulk_mesh_pt
+			     ->boundary_element_pt(Circular_arc_bnum,e));
 
-      // Pin in-plane dofs
-      for(unsigned i=0; i<n_pinned_u_dofs; i++)
-	{
-	  unsigned idof=circular_arc_pinned_u_dofs[i];
-	  el_pt->fix_in_plane_displacement_dof(idof,
-					       Circular_arc_bnum,
-					       Parameters::get_null_fct);
-	}
-      // Pin out-of-plane dofs (resting pin -- only set tangent derivatives)
-      for(unsigned idof=0; idof<6; ++idof)
-	{
-	  switch(idof)
-	    {
-	      // [hierher] Make function of arclength rather than global x
-	    case 0:
-	      // w
-	      el_pt->fix_out_of_plane_displacement_dof(idof,
-						       Circular_arc_bnum,
-						       Parameters::get_null_fct);
-	      // Parameters::get_w_along_arc);
-	      break;
-	    case 2:
-	      // dwdt
-	      el_pt->fix_out_of_plane_displacement_dof(idof,
-						       Circular_arc_bnum,
-						       Parameters::get_null_fct);
-	      // Parameters::get_dwdt_along_arc);
-	      break;
-	    case 5:
-	      // d2wdt2
-	      el_pt->fix_out_of_plane_displacement_dof(idof,
-						       Circular_arc_bnum,
-						       Parameters::get_null_fct);
-	      // Parameters::get_d2wdt2_along_arc);
-	      break;
-	    default:
-	      // Leave free
-	      break;
-	    } // End of switch-case [idof]
-	} // End loop over dofs [idof]
-    } // End loop over boundary elements [e]
+    // Pin in-plane dofs
+    for(unsigned i=0; i<n_pinned_u_dofs; i++)
+    {
+      unsigned idof=circular_arc_pinned_u_dofs[i];
+      el_pt->fix_in_plane_displacement_dof(idof,
+					   Circular_arc_bnum,
+					   Parameters::get_null_fct);
+    }
+    // Pin out-of-plane dofs (resting pin -- only set tangent derivatives)
+    for(unsigned idof=0; idof<6; ++idof)
+    {
+      switch(idof)
+      {
+	// [hierher] Make function of arclength rather than global x
+      case 0:
+	// w
+	el_pt->fix_out_of_plane_displacement_dof(idof,
+						 Circular_arc_bnum,
+						 Parameters::get_w_along_arc);
+						 // Parameters::get_null_fct);
+	break;
+      case 2:
+	// dwdt
+	el_pt->fix_out_of_plane_displacement_dof(idof,
+						 Circular_arc_bnum,
+						 Parameters::get_dwdt_along_arc);
+						 // Parameters::get_null_fct);
+	break;
+      case 5:
+	// d2wdt2
+	el_pt->fix_out_of_plane_displacement_dof(idof,
+						 Circular_arc_bnum,
+						 Parameters::get_d2wdt2_along_arc);
+						 // Parameters::get_null_fct);
+	break;
+      default:
+	// Leave free
+	break;
+      } // End of switch-case [idof]
+    } // End loop over dofs [idof]
+  } // End loop over boundary elements [e]
 
   // Loop over straight side 0 elements and apply homogenous BCs
   n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_0_bnum);
   n_pinned_u_dofs = straight_edge_0_pinned_u_dofs.size();
   n_pinned_w_dofs = straight_edge_0_pinned_w_dofs.size();
   for(unsigned e=0;e<n_b_element;e++)
-    {
-      // Get pointer to bulk element adjacent to b
-      ELEMENT* el_pt =
-	dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(Straight_edge_0_bnum,e));
+  {
+    // Get pointer to bulk element adjacent to b
+    ELEMENT* el_pt =
+      dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(Straight_edge_0_bnum,e));
 
-      // Pin in-plane dofs
-      for(unsigned i=0; i<n_pinned_u_dofs; i++)
-	{
-	  unsigned idof = straight_edge_0_pinned_u_dofs[i];
-	  el_pt->fix_in_plane_displacement_dof(idof,
+    // Pin in-plane dofs
+    for(unsigned i=0; i<n_pinned_u_dofs; i++)
+    {
+      unsigned idof = straight_edge_0_pinned_u_dofs[i];
+      el_pt->fix_in_plane_displacement_dof(idof,
+					   Straight_edge_0_bnum,
+					   Parameters::get_null_fct);
+    } // End loop over in-plane dofs [i]
+      // Pin out-of-plane dofs
+    for(unsigned i=0; i<n_pinned_w_dofs; i++)
+    {
+      unsigned idof = straight_edge_0_pinned_w_dofs[i];
+      el_pt->fix_out_of_plane_displacement_dof(idof,
 					       Straight_edge_0_bnum,
 					       Parameters::get_null_fct);
-	} // End loop over in-plane dofs [i]
-      // Pin out-of-plane dofs
-      for(unsigned i=0; i<n_pinned_w_dofs; i++)
-	{
-	  unsigned idof = straight_edge_0_pinned_w_dofs[i];
-	  el_pt->fix_out_of_plane_displacement_dof(idof,
-						   Straight_edge_0_bnum,
-						   Parameters::get_null_fct);
-	} // End loop over out-of-plane dofs [i]
-    } // End loop over boundary elements [e]
+    } // End loop over out-of-plane dofs [i]
+  } // End loop over boundary elements [e]
 
   // Loop over straight side 1 elements and apply homogenous BCs
   n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_1_bnum);
   n_pinned_u_dofs = straight_edge_1_pinned_u_dofs.size();
   n_pinned_w_dofs = straight_edge_1_pinned_w_dofs.size();
   for(unsigned e=0;e<n_b_element;e++)
-    {
-      // Get pointer to bulk element adjacent to b
-      ELEMENT* el_pt =
-	dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(Straight_edge_1_bnum,e));
+  {
+    // Get pointer to bulk element adjacent to b
+    ELEMENT* el_pt =
+      dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(Straight_edge_1_bnum,e));
 
-      // Pin in-plane dofs
-      for(unsigned i=0; i<n_pinned_u_dofs; i++)
-	{
-	  unsigned idof = straight_edge_1_pinned_u_dofs[i];
-	  el_pt->fix_in_plane_displacement_dof(idof,
+    // Pin in-plane dofs
+    for(unsigned i=0; i<n_pinned_u_dofs; i++)
+    {
+      unsigned idof = straight_edge_1_pinned_u_dofs[i];
+      el_pt->fix_in_plane_displacement_dof(idof,
+					   Straight_edge_1_bnum,
+					   Parameters::get_null_fct);
+    } // End loop over in-plane dofs [i]
+      // Pin out-of-plane dofs
+    for(unsigned i=0; i<n_pinned_w_dofs; i++)
+    {
+      unsigned idof = straight_edge_1_pinned_w_dofs[i];
+      el_pt->fix_out_of_plane_displacement_dof(idof,
 					       Straight_edge_1_bnum,
 					       Parameters::get_null_fct);
-	} // End loop over in-plane dofs [i]
-      // Pin out-of-plane dofs
-      for(unsigned i=0; i<n_pinned_w_dofs; i++)
-	{
-	  unsigned idof = straight_edge_1_pinned_w_dofs[i];
-	  el_pt->fix_out_of_plane_displacement_dof(idof,
-						   Straight_edge_1_bnum,
-						   Parameters::get_null_fct);
-	} // End loop over out-of-plane dofs [i]
-    } // End loop over boundary elements [e]
+    } // End loop over out-of-plane dofs [i]
+  } // End loop over boundary elements [e]
 
 
 
- 
+
 } // end set bc
 
 
@@ -649,82 +797,82 @@ upgrade_edge_elements_to_curve(const unsigned &ibound, Mesh* const &bulk_mesh_pt
 
   // Define the functions for each part of the boundary
   switch (ibound)
-    {
-    case Circular_arc_bnum:
-      parametric_curve_pt = &Parameters::Circular_arc;
-      break;
-    default:
-      throw OomphLibError("Unexpected boundary number. Please add additional \
+  {
+  case Circular_arc_bnum:
+    parametric_curve_pt = &Parameters::Circular_arc;
+    break;
+  default:
+    throw OomphLibError("Unexpected boundary number. Please add additional \
 curved boundaries as required.", OOMPH_CURRENT_FUNCTION,
-			  OOMPH_EXCEPTION_LOCATION);
-      break;
-    } // end parametric curve switch
+			OOMPH_EXCEPTION_LOCATION);
+    break;
+  } // end parametric curve switch
 
   // Loop over the bulk elements adjacent to boundary ibound
   const unsigned n_els=bulk_mesh_pt->nboundary_element(ibound);
   for(unsigned e=0; e<n_els; e++)
+  {
+    // Get pointer to bulk element adjacent to b
+    ELEMENT* bulk_el_pt = dynamic_cast<ELEMENT*>(
+      bulk_mesh_pt->boundary_element_pt(ibound,e));
+
+    // Initialise enum for the curved edge
+    MyC1CurvedElements::Edge edge(MyC1CurvedElements::none);
+
+    // Loop over all (three) nodes of the element and record boundary nodes
+    unsigned index_of_interior_node=3;
+    unsigned nnode_not_on_curved_boundary = 0;
+    const unsigned nnode = 3;
+    // Fill in vertices' positions (this step should be moved inside the curveable
+    // Bell element)
+    Vector<Vector<double> > xn(nnode,Vector<double>(2,0.0));
+    for(unsigned n=0;n<nnode;++n)
     {
-      // Get pointer to bulk element adjacent to b
-      ELEMENT* bulk_el_pt = dynamic_cast<ELEMENT*>(
-						   bulk_mesh_pt->boundary_element_pt(ibound,e));
+      Node* nod_pt = bulk_el_pt->node_pt(n);
+      xn[n][0]=nod_pt->x(0);
+      xn[n][1]=nod_pt->x(1);
 
-      // Initialise enum for the curved edge
-      MyC1CurvedElements::Edge edge(MyC1CurvedElements::none);
+      // Check if it is on the curved boundary
+      if(!(nod_pt->is_on_boundary(Circular_arc_bnum)))
+      {
+	index_of_interior_node = n;
+	nnode_not_on_curved_boundary++;
+      }
+    }// end record boundary nodes
 
-      // Loop over all (three) nodes of the element and record boundary nodes
-      unsigned index_of_interior_node=3;
-      unsigned nnode_not_on_curved_boundary = 0;
-      const unsigned nnode = 3;
-      // Fill in vertices' positions (this step should be moved inside the curveable
-      // Bell element)
-      Vector<Vector<double> > xn(nnode,Vector<double>(2,0.0));
-      for(unsigned n=0;n<nnode;++n)
-	{
-	  Node* nod_pt = bulk_el_pt->node_pt(n);
-	  xn[n][0]=nod_pt->x(0);
-	  xn[n][1]=nod_pt->x(1);
+    // s at the next (cyclic) node after interior
+    const double s_ubar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+1) % 3]);
+    // s at the previous (cyclic) node before interior
+    const double s_obar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+2) % 3]);
+    // Assign edge case
+    edge = static_cast<MyC1CurvedElements::Edge>(index_of_interior_node);
 
-	  // Check if it is on the curved boundary
-	  if(!(nod_pt->is_on_boundary(Circular_arc_bnum)))
-	    {
-	      index_of_interior_node = n;
-	      nnode_not_on_curved_boundary++;
-	    }
-	}// end record boundary nodes
+    // Check nnode_not_on_curved_boundary
+    if(nnode_not_on_curved_boundary == 0)
+    {
+      throw OomphLibError(
+	"No interior nodes. One node per CurvedElement must be interior.",
+	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
+    }
+    else if (nnode_not_on_curved_boundary > 1)
+    {
+      throw OomphLibError(
+	"Multiple interior nodes. Only one node per CurvedElement can be interior.",
+	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
+    }
 
-      // s at the next (cyclic) node after interior
-      const double s_ubar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+1) % 3]);
-      // s at the previous (cyclic) node before interior
-      const double s_obar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+2) % 3]);
-      // Assign edge case
-      edge = static_cast<MyC1CurvedElements::Edge>(index_of_interior_node);
-
-      // Check nnode_not_on_curved_boundary
-      if(nnode_not_on_curved_boundary == 0)
-	{
-	  throw OomphLibError(
-			      "No interior nodes. One node per CurvedElement must be interior.",
-			      OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
-	}
-      else if (nnode_not_on_curved_boundary > 1)
-	{
-	  throw OomphLibError(
-			      "Multiple interior nodes. Only one node per CurvedElement can be interior.",
-			      OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
-	}
-
-      // Check for inverted elements
-      if (s_ubar>s_obar)
-	{
-	  throw OomphLibError(
-			      "Decreasing parametric coordinate. Parametric coordinate must increase \
+    // Check for inverted elements
+    if (s_ubar>s_obar)
+    {
+      throw OomphLibError(
+	"Decreasing parametric coordinate. Parametric coordinate must increase \
 as the edge is traversed anti-clockwise.",
-			      OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
-	} // end checks
+	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
+    } // end checks
 
       // Upgrade it
-      bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,3);
-    }
+    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,5);
+  }
 }// end_upgrade_elements
 
 
@@ -805,12 +953,12 @@ void UnstructuredFvKProblem<ELEMENT>::pin_all_in_plane_displacements()
 {
   unsigned nnode = Bulk_mesh_pt->nnode();
   for(unsigned inode=0; inode<nnode; inode++)
-    {
-      Bulk_mesh_pt->node_pt(inode)->pin(0);
-      Bulk_mesh_pt->node_pt(inode)->set_value(0,0.0);
-      Bulk_mesh_pt->node_pt(inode)->pin(1);
-      Bulk_mesh_pt->node_pt(inode)->set_value(1,0.0);
-    }
+  {
+    Bulk_mesh_pt->node_pt(inode)->pin(0);
+    Bulk_mesh_pt->node_pt(inode)->set_value(0,0.0);
+    Bulk_mesh_pt->node_pt(inode)->pin(1);
+    Bulk_mesh_pt->node_pt(inode)->set_value(1,0.0);
+  }
 }
 
 
@@ -834,7 +982,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
 	    << comment << "\"\n";
   some_file.close();
- 
+
   // Doc error and return of the square of the L2 error
   //---------------------------------------------------
   //double error,norm,dummy_error,zero_norm;
@@ -905,35 +1053,38 @@ int main(int argc, char **argv)
   // Directory for solution
   string output_dir="RESLT";
   CommandLineArgs::specify_command_line_flag("--dir", &output_dir);
- 
+
   // Opening angle
   CommandLineArgs::specify_command_line_flag("--alpha", &Parameters::Alpha);
- 
+
   // Poisson Ratio
   CommandLineArgs::specify_command_line_flag("--nu", &Parameters::Nu);
- 
+
   // Applied Pressure
   CommandLineArgs::specify_command_line_flag("--eta", &Parameters::Eta);
- 
+
   // Element Area (no larger element than 0.09)
-  double element_area=0.09;
+  double element_area=1.0;
   CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
- 
+
   // Parse command line
   CommandLineArgs::parse_and_assign();
- 
+
   // Doc what has actually been specified on the command line
   CommandLineArgs::doc_specified_flags();
   UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4> >
     problem(element_area);
- 
+
   // Set up some problem paramters
   problem.max_residuals()=1e3;
   problem.max_newton_iterations()=20;
- 
+
+  // Pre mess doc
+  problem.doc_solution();
+
   // Do the newton solve
   problem.steady_newton_solve();
- 
+
   // Document
   problem.doc_solution();
   oomph_info << std::endl;

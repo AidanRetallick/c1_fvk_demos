@@ -7,8 +7,10 @@ noinst_PROGRAMS = clamped_square_inflation \
 		  rotated_square \
 		  circular_disc \
 		  circular_sector \
+		  corner_modes \
+	      square_corner_modes \
 		  star_trek \
-                  axisym_displ_based_fvk
+		  axisym_displ_based_fvk
 
 #----------------------------------------------------------------------
 
@@ -30,6 +32,10 @@ circular_disc_SOURCES = \
  circular_disc.cc
 circular_sector_SOURCES = \
  circular_sector.cc
+corner_modes_SOURCES = \
+ corner_modes.cc
+square_corner_modes_SOURCES = \
+ square_corner_modes.cc
 star_trek_SOURCES = \
  star_trek.cc
 #---------------------------------------------------------------------------
@@ -44,6 +50,12 @@ circular_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 circular_sector_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+corner_modes_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
+square_corner_modes_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 star_trek_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
