@@ -73,7 +73,7 @@ namespace Parameters
   /// FvK parameter (slightly dangerous; should really
   /// be computed as a dependent parameter to accommodate
   /// changes in Nu and Thickness.
-  double Eta = 12.0*(1.0-Nu*Nu)*Thickness*Thickness;
+  double Eta = 10000.0; // 12.0*(1.0-Nu*Nu)/(Thickness*Thickness);
 
   /// Magnitude of pressure
   double P_mag = 0.0;
@@ -84,6 +84,8 @@ namespace Parameters
   /// Element size
   double Element_area=0.01;
 
+  /// Order of the polynomial boundary interpolation
+  unsigned Boundary_order = 5;
 
   // ---- Parametric boundaries ------------------------------------------------
 
@@ -183,6 +185,39 @@ public:
   /// Update after solve (empty)
   void actions_after_newton_solve() {}
 
+
+  /// Make the problem linear (biharmonic) by pinning all in-plane dofs and
+  /// setting eta=0
+  void make_linear()
+  {
+    // Remove stretching coupling
+    Parameters::Eta = 0.0;
+
+    // Pin all in-plane displacements
+    unsigned n_node = Bulk_mesh_pt->nnode();
+    for(unsigned i_node = 0; i_node < n_node; i_node++)
+    {
+      Bulk_mesh_pt->node_pt(i_node)->pin(0);
+      Bulk_mesh_pt->node_pt(i_node)->set_value(0,0.0);
+      Bulk_mesh_pt->node_pt(i_node)->pin(1);
+      Bulk_mesh_pt->node_pt(i_node)->set_value(1,0.0);
+    }
+
+    // Update the corner constraintes based on boundary conditions
+    unsigned n_el = Constraint_mesh_pt->nelement();
+    for(unsigned i_el = 0; i_el < n_el; i_el++)
+    {
+      dynamic_cast<DuplicateNodeConstraintElement*>
+	(Constraint_mesh_pt->element_pt(i_el))
+	->validate_and_pin_redundant_constraints();
+    }
+
+    // Reassign the equation numbers
+    assign_eqn_numbers();
+
+  } // End make_linear()
+
+
   /// Doc the solution
   void doc_solution(const std::string& comment="");
 
@@ -210,9 +245,16 @@ private:
   /// Setup and build the mesh
   void build_mesh();
 
+  /// Duplicate corner nodes and create constraint elements at those corners
+  void duplicate_corner_nodes();
+
   /// Helper function to (re-)set boundary condition
   /// and complete the build of all elements
   void complete_problem_setup();
+
+  /// Loop over all curved edges, then loop over elements and upgrade
+  /// them to be curved elements
+  void upgrade_edge_elements_to_curve(const unsigned &b);
 
   /// Loop over all edge elements and rotate the Hermite degrees of freedom
   /// to be in the directions of the two in-plane vectors specified in Parameters
@@ -259,6 +301,9 @@ private:
   /// Pointer to "bulk" mesh
   TriangleMesh<ELEMENT>* Bulk_mesh_pt;
 
+  /// Pointer to constraint mesh
+  Mesh* Constraint_mesh_pt;
+
   /// Pointer to element that contains the central point
   GeomObject* Central_element_geom_obj_pt;
 
@@ -284,6 +329,13 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
 
   // Build the mesh
   build_mesh();
+
+  // Curved Edge upgrade
+  upgrade_edge_elements_to_curve(Boundary_b_bnum);
+  upgrade_edge_elements_to_curve(Boundary_r_bnum);
+  upgrade_edge_elements_to_curve(Boundary_t_bnum);
+  upgrade_edge_elements_to_curve(Boundary_l_bnum);
+
 
   // Rotate degrees of freedom
   rotate_edge_degrees_of_freedom(Bulk_mesh_pt);
@@ -389,14 +441,138 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   // Build  bulk mesh
   Bulk_mesh_pt=new TriangleMesh<ELEMENT>(Triangle_mesh_parameters);
 
+  // Split elements that have two boundary edges
+  TimeStepper* time_stepper_pt = Bulk_mesh_pt->Time_stepper_pt;
+  Bulk_mesh_pt->
+    template split_elements_with_multiple_boundary_edges<ELEMENT>(time_stepper_pt);
+
+  // Create the empty constraint element mesh
+  Constraint_mesh_pt = new Mesh();
+
+  // Add extra nodes at boundaries and constrain the dofs there.
+  duplicate_corner_nodes();
+
   //Add submesh to problem
   add_sub_mesh(Bulk_mesh_pt);
+  add_sub_mesh(Constraint_mesh_pt);
 
-  // Combine submeshes into a single Mesh (bit over the top here; could
-  // have assigned bulk mesh to mesh_pt() directly).
+  // Combine submeshes into a single Mesh (over the top; could just have
+  // assigned bulk mesh directly.
   build_global_mesh();
 
 }// end build_mesh
+
+
+
+//==============================================================================
+/// Duplicate nodes at corners in order to properly apply boundary
+/// conditions from each edge. Also adds (8) Lagrange multiplier dofs to the
+/// problem in order to constrain continuous interpolation here across its (8)
+/// vertex dofs. (Note "corner" here refers to the meeting point of any two
+/// sub-boundaries in the closed external boundary)
+//==============================================================================
+template <class ELEMENT>
+void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
+{
+  // Loop over the sections of the external boundary
+  unsigned n_bound = 4;
+  for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
+  {
+    // Store the index of the next boundary
+    unsigned ip1_bound = (i_bound+1)%n_bound;
+    // Storage for node and el pts at the boundary vertex
+    Node* old_node_pt = 0;
+    Node* new_node_pt = 0;
+    // FiniteElement* left_element_pt = 0;
+    FiniteElement* right_element_pt = 0;
+
+    // To find the node between boundaries i and i+1, we loop over all nodes on
+    // boundary i until we find the one that is also on i+1, we then loop over
+    // all boundary elements on i and i+1 until we find the elements that sit
+    // either side of the corner. (there might be a smarter way but this was the
+    // first idea I had -- Aidan)
+
+    //----------------------------------------------------------------------
+    // First, find corner the node
+    unsigned n_b_node = Bulk_mesh_pt->nboundary_node(i_bound);
+    for(unsigned i_b_node = 0; i_b_node < n_b_node; i_b_node++)
+    {
+      // Store the node we are checking
+      Node* node_pt = Bulk_mesh_pt->boundary_node_pt(i_bound,i_b_node);
+
+      // If it is on the next boundary we have found the corner node
+      if(node_pt->is_on_boundary(ip1_bound))
+      {
+        // [zdec] debug
+        oomph_info << "Found a corner node at " << std::endl << "  ("
+                   << node_pt->position(0) << "," << node_pt->position(1) << ")"
+                   << std::endl;
+        old_node_pt = node_pt;
+	break;
+      }
+    }
+
+    //----------------------------------------------------------------------
+    // Find the right (i+1th boundary) side element
+    unsigned n_b_el = Bulk_mesh_pt->nboundary_element(ip1_bound);
+    for (unsigned i_b_el = 0; i_b_el < n_b_el; i_b_el++)
+    {
+      // Get the element pointer
+      FiniteElement* el_pt = Bulk_mesh_pt->boundary_element_pt(ip1_bound, i_b_el);
+      // If the corner node pt is in the element we have found the right
+      // element
+      if (el_pt->get_node_number(old_node_pt) != -1)
+      {
+        right_element_pt = el_pt;
+        break;
+      }
+    }
+
+    //----------------------------------------------------------------------
+    // Now we need to create a new node and substitute the right elements
+    // old corner node for this new one
+    new_node_pt = right_element_pt->construct_boundary_node(
+      right_element_pt->get_node_number(old_node_pt));
+    // Copy the position and other info from the old node into the new node
+    // [debug]
+    oomph_info << "About to copy node data" << std::endl;
+    new_node_pt->x(0)=old_node_pt->x(0);
+    new_node_pt->x(1)=old_node_pt->x(1);
+    oomph_info << "Copied node data" << std::endl;
+    // Then we add this node to the mesh
+    Bulk_mesh_pt->add_node_pt(new_node_pt);
+    // Then replace the old node for the new one on the right boundary
+    Bulk_mesh_pt->remove_boundary_node(ip1_bound,old_node_pt);
+    Bulk_mesh_pt->add_boundary_node(ip1_bound,new_node_pt);
+
+    //----------------------------------------------------------------------
+    // The final job is to constrain this duplication using the specialised
+    // Lagrange multiplier elements which enforce equality of displacement and
+    // its derivatives either side of this corner.
+    CurvilineGeomObject* left_parametrisation_pt =
+      Parameters::Curviline_edge_pt[i_bound];
+    CurvilineGeomObject* right_parametrisation_pt =
+      Parameters::Curviline_edge_pt[ip1_bound];
+
+    // Get the coordinates on each node on their respective boundaries
+    Vector<double> left_boundary_coordinate =
+      {left_parametrisation_pt->get_zeta(old_node_pt->position())};
+    Vector<double> right_boundary_coordinate =
+      {right_parametrisation_pt->get_zeta(new_node_pt->position())};
+
+    // Create the constraining element
+    DuplicateNodeConstraintElement* constraint_element_pt =
+      new DuplicateNodeConstraintElement(old_node_pt,
+                                         new_node_pt,
+                                         left_parametrisation_pt,
+                                         right_parametrisation_pt,
+                                         left_boundary_coordinate,
+                                         right_boundary_coordinate);
+
+    // Add the constraining element to the mesh
+    Constraint_mesh_pt->add_element_pt(constraint_element_pt);
+  }
+}
 
 
 
@@ -426,7 +602,17 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   // Set the boundary conditions
   apply_boundary_conditions();
 
+  // Update the corner constraintes based on boundary conditions
+  unsigned n_el = Constraint_mesh_pt->nelement();
+  for(unsigned i_el = 0; i_el < n_el; i_el++)
+  {
+    dynamic_cast<DuplicateNodeConstraintElement*>
+      (Constraint_mesh_pt->element_pt(i_el))
+      ->validate_and_pin_redundant_constraints();
+  }
+
 } // end of complete
+
 
 
 //==============================================================================
@@ -486,6 +672,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom(
     }
   }
 } // end rotate_edge_degrees_of_freedom
+
 
 
 //==start_of_apply_bc=====================================================
@@ -674,6 +861,115 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
 } // end set bc
 
 
+
+
+//==============================================================================
+/// A function that upgrades straight sided elements to be curved. This involves
+// Setting up the parametric boundary, F(s) and the first derivative F'(s)
+// We also need to set the edge number of the upgraded element and the positions
+// of the nodes j and k (defined below) and set which edge (k) is to be exterior
+/*            @ k                                                             */
+/*           /(                                                               */
+/*          /. \                                                              */
+/*         /._._)                                                             */
+/*      i @     @ j                                                           */
+// For RESTING or FREE boundaries we need to have a C2 CONTINUOUS boundary
+// representation. That is we need to have a continuous 2nd derivative defined
+// too. This is well discussed in by [Zenisek 1981] (Aplikace matematiky ,
+// Vol. 26 (1981), No. 2, 121--141). This results in the necessity for F''(s)
+// as well.
+//==start_of_upgrade_edge_elements==============================================
+template <class ELEMENT>
+void UnstructuredFvKProblem<ELEMENT >::
+upgrade_edge_elements_to_curve(const unsigned &ibound)
+{
+  // Loop over the bulk elements adjacent to boundary ibound
+  const unsigned n_els=Bulk_mesh_pt->nboundary_element(ibound);
+  for(unsigned e=0; e<n_els; e++)
+  {
+    // Get pointer to bulk element adjacent to b
+    ELEMENT* bulk_el_pt = dynamic_cast<ELEMENT*>(
+      Bulk_mesh_pt->boundary_element_pt(ibound,e));
+
+    // hierher what is that? why "My"?
+    // Initialise enum for the curved edge
+    MyC1CurvedElements::Edge edge(MyC1CurvedElements::none);
+
+    // Loop over all (three) nodes of the element and record boundary nodes
+    unsigned index_of_interior_node = 3;
+    unsigned nnode_on_neither_boundary = 0;
+    const unsigned nnode = 3;
+
+
+    // hierher what does this comment mean?
+    // Fill in vertices' positions (this step should be moved inside the curveable
+    // Bell element)
+    Vector<Vector<double> > xn(nnode,Vector<double>(2,0.0));
+    for(unsigned n=0;n<nnode;++n)
+    {
+      Node* nod_pt = bulk_el_pt->node_pt(n);
+      xn[n][0]=nod_pt->x(0);
+      xn[n][1]=nod_pt->x(1);
+
+      // Check if it is on the outer boundaries
+      if(!(nod_pt->is_on_boundary(ibound)))
+      {
+	index_of_interior_node = n;
+	++nnode_on_neither_boundary;
+      }
+    }// end record boundary nodes
+
+
+    // hierher: ouch! This seems to map (x,y) to zeta! This is at best possible to within
+    // a tolerance. Needs a redesign!
+
+    // s at the next (cyclic) node after interior
+    const double s_ubar =
+      Parameters::Curviline_edge_pt[ibound]
+      ->get_zeta(xn[(index_of_interior_node+1) % 3]);
+
+    // s at the previous (cyclic) node before interior
+    const double s_obar =
+      Parameters::Curviline_edge_pt[ibound]
+      ->get_zeta(xn[(index_of_interior_node+2) % 3]);
+
+    // Assign edge case
+    edge = static_cast<MyC1CurvedElements::Edge>(index_of_interior_node);
+
+    // Check nnode_on_neither_boundary
+    if(nnode_on_neither_boundary == 0)
+    {
+      throw OomphLibError(
+	"No interior nodes. One node per CurvedElement must be interior.",
+	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
+    }
+    else if (nnode_on_neither_boundary > 1)
+    {
+      throw OomphLibError(
+	"Multiple interior nodes. Only one node per CurvedElement can be interior.",
+	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
+    }
+
+    // Check for inverted elements
+    if (s_ubar>s_obar)
+    {
+      throw OomphLibError(
+	"Decreasing parametric coordinate. Parametric coordinate must increase as the edge is traversed anti-clockwise.",
+	OOMPH_CURRENT_FUNCTION,
+	OOMPH_EXCEPTION_LOCATION);
+    } // end checks
+
+    // Upgrade it
+    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,
+					  Parameters::Curviline_edge_pt[ibound],
+					  Parameters::Boundary_order);
+  }
+}// end_upgrade_elements
+
+
+
+
+
 //==start_of_doc_solution=================================================
 /// Doc the solution
 //========================================================================
@@ -734,6 +1030,9 @@ int main(int argc, char **argv)
   UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
     problem;
 
+  // Make problem linear
+  problem.make_linear();
+
   // Set pressure
   Parameters::P_mag = 10.0;
   // Set Poisson ratio
@@ -749,5 +1048,8 @@ int main(int argc, char **argv)
   problem.newton_solve();
   // Document the current solution
   problem.doc_solution();
+
+  // Test the rotated dofs
+
 
 } //End of main

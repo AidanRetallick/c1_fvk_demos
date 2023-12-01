@@ -311,7 +311,7 @@ namespace Parameters
   double T_mag = 0.0;
 
   /// Order of boundary interpolation
-  unsigned Boundary_order = 5;
+  unsigned Boundary_order = 3;
 
   // hierher what are these objects? Shouldn't they be
   // used in the mesh generatino too; surely they encode the
@@ -1323,8 +1323,8 @@ int main(int argc, char **argv)
   UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
     problem(element_area);
 
-  // Doc the dofs
-  problem.describe_dofs();
+  // // Doc the dofs
+  // problem.describe_dofs();
 
   // Set pressure
   Parameters::P_mag = 1.0;
@@ -1347,11 +1347,11 @@ int main(int argc, char **argv)
   // Document the current solution
   problem.doc_solution();
 
-  // Output the vector of dofs
-  LinearAlgebraDistribution* dist = problem.dof_distribution_pt();
-  DoubleVector dofs(dist);
-  problem.get_dofs(dofs);
-  dofs.output("solution_dofs.txt");
+  // // Output the vector of dofs
+  // LinearAlgebraDistribution* dist = problem.dof_distribution_pt();
+  // DoubleVector dofs(dist);
+  // problem.get_dofs(dofs);
+  // dofs.output("solution_dofs.txt");
 
   // double dp_mag=0.000001;
   // double dt_mag=0.000001;
@@ -1404,7 +1404,7 @@ int main(int argc, char **argv)
   // 	  dynamic_cast<FoepplVonKarmanC1CurvableBellElement<4>*>
   // 	  (problem.mesh_pt()->boundary_element_pt(b,e));
 
-  // 	// A true clamp, so we set everything except the second normal to zero
+  // 	// Change set ith dof to 1 and the rest to 0
   // 	for(unsigned idof=0; idof<6; ++idof)
   // 	{
   // 	  // Cannot set second normal derivative

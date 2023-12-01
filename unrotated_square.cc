@@ -58,9 +58,7 @@ namespace Parameters
   /// Poisson ratio
   double Nu = 0.5;
 
-  /// FvK parameter (slightly dangerous; should really
-  /// be computed as a dependent parameter to accommodate
-  /// changes in Nu and Thickness.
+  /// FvK parameter
   double Eta = 12.0*(1.0-Nu*Nu)*Thickness*Thickness;
 
   /// Magnitude of pressure
@@ -71,6 +69,12 @@ namespace Parameters
 
   /// Element size
   double Element_area=0.1;
+
+  /// Function call to update dependent parameters (Eta)
+  void update_dependent_parameters()
+  {
+    Eta = 12.0*(1.0-Nu*Nu)*Thickness*Thickness;
+  }
 
   /// Pressure depending on the position (x,y)
   void get_pressure(const Vector<double>& x, double& pressure)

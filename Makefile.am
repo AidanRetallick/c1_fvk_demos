@@ -3,31 +3,32 @@ include $(top_srcdir)/config/makefile_templates/demo_drivers
 
 # Name of executables: The prefix "noinst" means the executables don't
 # have to be installed anywhere.
-noinst_PROGRAMS = clamped_square_inflation \
-		  rotated_square \
-		  circular_disc \
-		  circular_sector \
-		  corner_modes \
-	      square_corner_modes \
-		  star_trek \
-		  axisym_displ_based_fvk
+noinst_PROGRAMS = unrotated_square \
+                  rotated_square \
+                  rotated_square_upgraded \
+                  circular_disc \
+                  circular_sector \
+                  sector_corner_modes \
+                  square_corner_modes \
+                  star_trek \
+                  triangular_plate \
+                  axisym_displ_based_fvk \
+                  element_test
 
-#----------------------------------------------------------------------
-
-# Sources for executable
+#-Odd ones out---------------------------------------------------------
+# Sources for axisym driver
 axisym_displ_based_fvk_SOURCES = axisym_displ_based_fvk.cc 
-
 # Required libraries: 
 axisym_displ_based_fvk_LDADD = -L@libdir@  -laxisym_displ_based_foeppl_von_karman -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 
 
-#---------------------------------------------------------------------------
-
-# Local sources that each code depends on:
-clamped_square_inflation_SOURCES = \
- clamped_square_inflation.cc
+#-FvK sources---------------------------------------------------------------
+unrotated_square_SOURCES = \
+ unrotated_square.cc
 rotated_square_SOURCES = \
  rotated_square.cc
+rotated_square_upgraded_SOURCES = \
+ rotated_square_upgraded.cc
 circular_disc_SOURCES = \
  circular_disc.cc
 circular_sector_SOURCES = \
@@ -36,30 +37,35 @@ corner_modes_SOURCES = \
  corner_modes.cc
 square_corner_modes_SOURCES = \
  square_corner_modes.cc
+triangular_plate_SOURCES = \
+ triangular_plate.cc
 star_trek_SOURCES = \
  star_trek.cc
-#---------------------------------------------------------------------------
+element_test_SOURCES = \
+ element_test.cc
 
-clamped_square_inflation_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+#-FvK libraries-------------------------------------------------------------
+unrotated_square_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
-
 rotated_square_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
-
+rotated_square_upgraded_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 circular_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
-
 circular_sector_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
-
 corner_modes_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
-
 square_corner_modes_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
-
+triangular_plate_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 star_trek_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+element_test_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+
 
 # Local sources that Jack's own code depends on: This code also uses
 # objects from Jack's own library. The source code for this library
