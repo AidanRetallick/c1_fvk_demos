@@ -50,6 +50,7 @@ using MathematicalConstants::Pi;
 // 2.  Build the mesh
 
 // hierher: combine 3 and 4?
+//   aidan: these are different steps (unupgraded elements may need rotating)
 
 // 3.* Upgrade Elements
 //     We upgrade edge elements on relevant boundaries to be curved C1 elements.
@@ -98,6 +99,217 @@ namespace oomph
 {
 
 
+/////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+
+ 
+  /// \short Specialisation of CurvilineGeomObject for half a circle.
+  class MatthiasCurvilineCircleTop : public CurvilineGeomObject
+  {
+  public:
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleTop()
+     : CurvilineGeomObject(), Radius(1.0), Clockwise_zeta(false)
+    {
+    }
+
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleTop(const double& radius, const bool& clockwise_zeta)
+      : CurvilineGeomObject(), Radius(radius), Clockwise_zeta(clockwise_zeta)
+    {
+    }
+    /// \short Constructor: pass # of Eulerian and Lagrangian coordinates
+    /// and pointer to time-stepper which is used to handle the
+    /// position at previous timesteps and allows the evaluation
+    /// of veloc/acceleration etc. in cases where the GeomData
+    /// varies with time.
+    MatthiasCurvilineCircleTop(TimeStepper* time_stepper_pt)
+      : CurvilineGeomObject(time_stepper_pt)
+    {
+    }
+
+    /// Broken copy constructor
+    MatthiasCurvilineCircleTop(const MatthiasCurvilineCircleTop& dummy)
+    {
+      BrokenCopy::broken_copy("MatthiasCurvilineCircleTop");
+    }
+
+    /// Broken assignment operator
+    void operator=(const MatthiasCurvilineCircleTop&)
+    {
+      BrokenCopy::broken_assign("MatthiasCurvilineCircleTop");
+    }
+
+    /// (Empty) destructor
+    virtual ~MatthiasCurvilineCircleTop() {}
+
+    /// \short Position Vector w.r.t. to zeta:
+    virtual void position(const Vector<double>& zeta, Vector<double>& r) const
+    {
+      r[0] = -Radius * std::sin(zeta[0]);
+      r[1] = Radius * std::cos(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        r[0] *= -1;
+      }
+    }
+
+    /// \short Derivative of position Vector w.r.t. to zeta:
+    virtual void dposition(const Vector<double>& zeta,
+                           Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = -Radius * std::cos(zeta[0]);
+      drdzeta[1] = -Radius * std::sin(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        drdzeta[0] *= -1;
+      }
+    }
+
+
+    /// \short 2nd derivative of position Vector w.r.t. to coordinates:
+    /// \f$ \frac{d^2R_i}{d \zeta_\alpha d \zeta_\beta}\f$ =
+    /// ddrdzeta(alpha,beta,i).
+    /// Evaluated at current time.
+    virtual void d2position(const Vector<double>& zeta,
+                            Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = Radius * std::sin(zeta[0]);
+      drdzeta[1] = -Radius * std::cos(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        drdzeta[0] *= -1;
+      }
+    }
+
+    /// Get s from x for part 0 of the boundary (inverse mapping - for
+    /// convenience)
+    double get_zeta(const Vector<double>& x) const
+    {
+      // The arc length (parametric parameter) for the upper semi circular arc
+      return (Clockwise_zeta ? atan2(x[0], x[1]) : atan2(-x[0], x[1]));
+    }
+
+  private:
+    double Radius;
+    bool Clockwise_zeta;
+  };
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+
+ 
+  /// \short Specialisation of CurvilineGeomObject for half a circle.
+  class MatthiasCurvilineCircleBottom : public CurvilineGeomObject
+  {
+  public:
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleBottom()
+     : CurvilineGeomObject(), Radius(1.0), Clockwise_zeta(false)
+    {
+    }
+
+    /// \short Constructor: Pass dimension of geometric object (# of Eulerian
+    /// coords = # of Lagrangian coords; no time history available/needed)
+    MatthiasCurvilineCircleBottom(const double& radius, const bool& clockwise_zeta)
+      : CurvilineGeomObject(), Radius(radius), Clockwise_zeta(clockwise_zeta)
+    {
+    }
+
+    /// \short Constructor: pass # of Eulerian and Lagrangian coordinates
+    /// and pointer to time-stepper which is used to handle the
+    /// position at previous timesteps and allows the evaluation
+    /// of veloc/acceleration etc. in cases where the GeomData
+    /// varies with time.
+    MatthiasCurvilineCircleBottom(TimeStepper* time_stepper_pt)
+      : CurvilineGeomObject(time_stepper_pt)
+    {
+    }
+
+    /// Broken copy constructor
+    MatthiasCurvilineCircleBottom(const MatthiasCurvilineCircleBottom& dummy)
+    {
+      BrokenCopy::broken_copy("MatthiasCurvilineCircleBottom");
+    }
+
+    /// Broken assignment operator
+    void operator=(const MatthiasCurvilineCircleBottom&)
+    {
+      BrokenCopy::broken_assign("MatthiasCurvilineCircleBottom");
+    }
+
+    /// (Empty) destructor
+    virtual ~MatthiasCurvilineCircleBottom() {}
+
+    /// \short Position Vector w.r.t. to zeta:
+    virtual void position(const Vector<double>& zeta, Vector<double>& r) const
+    {
+      r[0] = Radius * std::sin(zeta[0]);
+      r[1] = -Radius * std::cos(zeta[0]);
+      // Zeta -> - Zeta
+      if (Clockwise_zeta)
+      {
+        r[1] *= -1;
+      }
+    }
+
+    /// \short Derivative of position Vector w.r.t. to zeta:
+    virtual void dposition(const Vector<double>& zeta,
+                           Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = Radius * std::cos(zeta[0]);
+      drdzeta[1] = Radius * std::sin(zeta[0]);
+      if (Clockwise_zeta)
+      {
+        drdzeta[1] *= -1;
+      }
+    }
+
+
+    /// \short 2nd derivative of position Vector w.r.t. to coordinates:
+    /// \f$ \frac{d^2R_i}{d \zeta_\alpha d \zeta_\beta}\f$ =
+    /// ddrdzeta(alpha,beta,i).
+    /// Evaluated at current time.
+    virtual void d2position(const Vector<double>& zeta,
+                            Vector<double>& drdzeta) const
+    {
+      drdzeta[0] = -Radius * std::sin(zeta[0]);
+      drdzeta[1] = Radius * std::cos(zeta[0]);
+      if (Clockwise_zeta)
+      {
+        drdzeta[1] *= -1;
+      }
+    }
+
+    /// Get s from x for part 0 of the boundary (inverse mapping - for
+    /// convenience)
+    double get_zeta(const Vector<double>& x) const
+    {
+      // The arc length (parametric parameter) for the upper semi circular arc
+      return (Clockwise_zeta ? atan2(x[0], x[1]) : atan2(x[0], -x[1]));
+    }
+
+  private:
+    double Radius;
+    bool Clockwise_zeta;
+  };
+
+/////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////////
+ 
+
   // hierher
   typedef FoepplVonKarmanC1CurvableBellElement<4> NON_WRAPPED_ELEMENT;
 
@@ -116,7 +328,7 @@ namespace oomph
     {
       // Add internal Data to store forces (for now)
       oomph_info << "# of internal Data objects before: " <<
-	this->ninternal_data() << std::endl;
+        this->ninternal_data() << std::endl;
     }
 
     /// Destructor (empty)
@@ -135,9 +347,9 @@ namespace oomph
       // Call the generic residuals function with flag set to 0 hierher why no arg?
       // using a dummy matrix argument
       ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
-	residuals,
-	GeneralisedElement::Dummy_matrix,
-	0);
+        residuals,
+        GeneralisedElement::Dummy_matrix,
+        0);
 
       //fill_in_contribution_to_residuals(residuals);
 
@@ -150,15 +362,15 @@ namespace oomph
     /// Add the element's contribution to its residual vector and
     /// element Jacobian matrix (wrapper)
     void fill_in_contribution_to_jacobian(Vector<double> &residuals,
-					  DenseMatrix<double> &jacobian)
+                                          DenseMatrix<double> &jacobian)
     {
       //Call the generic routine with the flag set to 1 hierher why no arg?
       // ELEMENT::fill_in_contribution_to_jacobian(residuals,
       //                                           jacobian);
       ELEMENT::fill_in_generic_residual_contribution_foeppl_von_karman(
-	residuals,
-	jacobian,
-	1);
+        residuals,
+        jacobian,
+        1);
 
       // Add point force_and_torque contribution
       fill_in_point_force_and_torque_contribution_to_residuals(residuals);
@@ -175,8 +387,8 @@ namespace oomph
       // No further action
       if (S_point_force_and_torque.size()==0)
       {
-	oomph_info << "bailing" << std::endl;
-	return;
+        oomph_info << "bailing" << std::endl;
+        return;
       }
 
 
@@ -352,8 +564,8 @@ namespace Parameters
     else
     {
       throw OomphLibError("Unexpected problem setup",
-			  OOMPH_CURRENT_FUNCTION,
-			  OOMPH_EXCEPTION_LOCATION);
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
     }
   }
 
@@ -389,26 +601,11 @@ namespace Parameters
     else
     {
       throw OomphLibError("Unexpected problem setup",
-			  OOMPH_CURRENT_FUNCTION,
-			  OOMPH_EXCEPTION_LOCATION);
+                          OOMPH_CURRENT_FUNCTION,
+                          OOMPH_EXCEPTION_LOCATION);
     }
 
   }
-
-
-  // hierher: kill but check with Aidan first
-
-  // // This metric will flag up any non--axisymmetric parts
-  // void axiasymmetry_metric(const Vector<double>& x,
-  //        		  const Vector<double>& u,
-  //        		  const Vector<double>& u_exact,
-  //        		  double& error,
-  //        		  double& norm)
-  // {
-  //  // We use the theta derivative of the out of plane deflection
-  //  error = pow((-x[1]*u[1] + x[0]*u[2])/sqrt(x[0]*x[0]+x[1]*x[1]),2);
-  //  norm  = pow(( x[0]*u[1] + x[1]*u[2])/sqrt(x[0]*x[0]+x[1]*x[1]),2);
-  // }
 
   // Get the null function for applying homogenous BCs
   void get_null_fct(const Vector<double>& X, double& exact_w)
@@ -506,8 +703,8 @@ public:
     for(unsigned i_el = 0; i_el < n_el; i_el++)
     {
       dynamic_cast<DuplicateNodeConstraintElement*>
-	(Constraint_mesh_pt->element_pt(i_el))
-	->validate_and_pin_redundant_constraints();
+        (Constraint_mesh_pt->element_pt(i_el))
+        ->validate_and_pin_redundant_constraints();
     }
 
     // Reassign the equation numbers
@@ -668,7 +865,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   Outer_curvilinear_boundary_pt.resize(2);
   Outer_curvilinear_boundary_pt[0] =
     new TriangleMeshCurviLine(Outer_boundary_ellipse_pt, zeta_start,
-			      zeta_end, nsegment, Outer_boundary0);
+                              zeta_end, nsegment, Outer_boundary0);
 
   //Second bit
   zeta_start = MathematicalConstants::Pi;
@@ -676,7 +873,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   nsegment = (int)(MathematicalConstants::Pi/sqrt(Element_area));
   Outer_curvilinear_boundary_pt[1] =
     new TriangleMeshCurviLine(Outer_boundary_ellipse_pt, zeta_start,
-			      zeta_end, nsegment, Outer_boundary1);
+                              zeta_end, nsegment, Outer_boundary1);
 
   // Combine
   Outer_boundary_pt =
@@ -766,8 +963,6 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 
 
 
-
-
 //==============================================================================
 /// Duplicate nodes at corners in order to properly apply boundary
 /// conditions from each edge. Also adds (8) Lagrange multiplier dofs to the
@@ -807,12 +1002,12 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
       // If it is on the next boundary we have found the corner node
       if(node_pt->is_on_boundary(ip1_bound))
       {
-        // [zdec] debug
-        oomph_info << "Found a corner node at " << std::endl << "  ("
-                   << node_pt->position(0) << "," << node_pt->position(1) << ")"
-                   << std::endl;
+        // // [zdec] debug
+        // oomph_info << "Found a corner node at " << std::endl << "  ("
+        //            << node_pt->position(0) << "," << node_pt->position(1) << ")"
+        //            << std::endl;
         old_node_pt = node_pt;
-	break;
+        break;
       }
     }
 
@@ -838,11 +1033,8 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
     new_node_pt = right_element_pt->construct_boundary_node(
       right_element_pt->get_node_number(old_node_pt));
     // Copy the position and other info from the old node into the new node
-    // [debug]
-    oomph_info << "About to copy node data" << std::endl;
     new_node_pt->x(0)=old_node_pt->x(0);
     new_node_pt->x(1)=old_node_pt->x(1);
-    oomph_info << "Copied node data" << std::endl;
     // Then we add this node to the mesh
     Bulk_mesh_pt->add_node_pt(new_node_pt);
     // Then replace the old node for the new one on the right boundary
@@ -886,10 +1078,9 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
 /// pin all displacements and rotations in the centre
 //==============================================================================
 template<class ELEMENT>
-void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_centre_node()
+void UnstructuredFvKProblem<ELEMENT>::
+pin_all_displacements_and_rotation_at_centre_node()
 {
-
-
   // Choose non-centre node on which we'll supress
   // the rigid body rotation around the z axis.
   double max_x_potentially_pinned_node=-DBL_MAX;
@@ -932,19 +1123,15 @@ void UnstructuredFvKProblem<ELEMENT>::pin_all_displacements_and_rotation_at_cent
       nod_pt->set_value(3,0.0);
       nod_pt->pin(4);
       nod_pt->set_value(4,0.0);
-
-
     }
   }
 
-
   oomph_info << "rotation pinning node: "
-  << pinned_rotation_node_pt->x(0) << " "
-  << pinned_rotation_node_pt->x(1) << " "
-  << std::endl;
+             << pinned_rotation_node_pt->x(0) << " "
+             << pinned_rotation_node_pt->x(1) << " "
+             << std::endl;
   // Pin y displacement
   pinned_rotation_node_pt->pin(1);
-
 }
 
 
@@ -967,10 +1154,7 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
     el_pt->pressure_fct_pt() = &Parameters::get_pressure;
     el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
 
-    // hierher Aidan: kill this error metric thing in element
-    // There is no error metric in this case
-    // el_pt->error_metric_fct_pt() = &Parameters::axiasymmetry_metric;
-
+    // Assign the parameter pointers for the element
     el_pt->nu_pt() = &Parameters::Nu;
     el_pt->eta_pt() = &Parameters::Eta;
   }
@@ -978,14 +1162,6 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   // Set the boundary conditions
   apply_boundary_conditions();
 
-  // Update the corner constraintes based on boundary conditions
-  unsigned n_el = Constraint_mesh_pt->nelement();
-  for(unsigned i_el = 0; i_el < n_el; i_el++)
-  {
-    dynamic_cast<DuplicateNodeConstraintElement*>
-      (Constraint_mesh_pt->element_pt(i_el))
-      ->validate_and_pin_redundant_constraints();
-  }
 }
 
 
@@ -1006,16 +1182,16 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
       const unsigned nb_element = Bulk_mesh_pt->nboundary_element(b);
       for(unsigned e=0;e<nb_element;e++)
       {
-	// Get pointer to bulk element adjacent to b
-	ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
+        // Get pointer to bulk element adjacent to b
+        ELEMENT* el_pt = dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b,e));
 
-	// A true clamp, so we set everything except the second normal to zero
-	for(unsigned idof=0; idof<6; ++idof)
+        // A true clamp, so we set everything except the second normal to zero
+        for(unsigned idof=0; idof<6; ++idof)
         {
           // Cannot set second normal derivative
-	  if(idof!=3)
+          if(idof!=3)
           {
-	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
+            el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
           }
         }
       }
@@ -1027,6 +1203,17 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
     pin_all_displacements_and_rotation_at_centre_node();
   }
 
+  // Update the corner constraintes based on boundary conditions
+  unsigned n_el = Constraint_mesh_pt->nelement();
+  for(unsigned i_el = 0; i_el < n_el; i_el++)
+  {
+    dynamic_cast<DuplicateNodeConstraintElement*>
+      (Constraint_mesh_pt->element_pt(i_el))
+      ->validate_and_pin_redundant_constraints();
+  }
+
+  // Assign the equation numbers
+  assign_eqn_numbers();
 
 } // end set bc
 
@@ -1069,8 +1256,8 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 
   default:
     throw OomphLibError("Unexpected boundary number.",
-			OOMPH_CURRENT_FUNCTION,
-			OOMPH_EXCEPTION_LOCATION);
+                        OOMPH_CURRENT_FUNCTION,
+                        OOMPH_EXCEPTION_LOCATION);
     break;
   } // end parametric curve switch
 
@@ -1105,16 +1292,19 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 
       // Check if it is on the outer boundaries
       if(!(nod_pt->is_on_boundary(Outer_boundary0) ||
-	   nod_pt->is_on_boundary(Outer_boundary1)))
+           nod_pt->is_on_boundary(Outer_boundary1)))
       {
-	index_of_interior_node = n;
-	++nnode_on_neither_boundary;
+        index_of_interior_node = n;
+        ++nnode_on_neither_boundary;
       }
     }// end record boundary nodes
 
 
-    // hierher: ouch! This seems to map (x,y) to zeta! This is at best possible to within
-    // a tolerance. Needs a redesign!
+    // hierher: ouch! This seems to map (x,y) to zeta! This is at best possible
+    // to within a tolerance. Needs a redesign!
+
+    // aidan: Inverse exists for (x,y) in map image (the boundary), so shouldn't
+    // this be fine for boundary nodes?
 
     // s at the next (cyclic) node after interior
     const double s_ubar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+1) % 3]);
@@ -1129,29 +1319,29 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     if(nnode_on_neither_boundary == 0)
     {
       throw OomphLibError(
-	"No interior nodes. One node per CurvedElement must be interior.",
-	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
+        "No interior nodes. One node per CurvedElement must be interior.",
+        OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
     }
     else if (nnode_on_neither_boundary > 1)
     {
       throw OomphLibError(
-	"Multiple interior nodes. Only one node per CurvedElement can be interior.",
-	OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
+        "Multiple interior nodes. Only one node per CurvedElement can be interior.",
+        OOMPH_CURRENT_FUNCTION, OOMPH_EXCEPTION_LOCATION);
     }
 
     // Check for inverted elements
     if (s_ubar>s_obar)
     {
       throw OomphLibError(
-	"Decreasing parametric coordinate. Parametric coordinate must increase as the edge is traversed anti-clockwise.",
-	OOMPH_CURRENT_FUNCTION,
-	OOMPH_EXCEPTION_LOCATION);
+        "Decreasing parametric coordinate. Parametric coordinate must increase as the edge is traversed anti-clockwise.",
+        OOMPH_CURRENT_FUNCTION,
+        OOMPH_EXCEPTION_LOCATION);
     } // end checks
 
     // Upgrade it // hierher what is "3"?
     bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,
-					  parametric_curve_pt,
-					  Parameters::Boundary_order);
+                                          parametric_curve_pt,
+                                          Parameters::Boundary_order);
   }
 }// end_upgrade_elements
 
@@ -1167,12 +1357,11 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 template <class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
 {
-
-  std::ofstream debugstream;
-  debugstream.open("test_file");
-  debugstream << "x y nx ny tx ty nx_x nx_y ny_x ny_y tx_x tx_y ty_x ty_y"
-              << std::endl;
-  debugstream.close();
+  // std::ofstream debugstream;
+  // debugstream.open("test_file");
+  // debugstream << "x y nx ny tx ty nx_x nx_y ny_x ny_y tx_x tx_y ty_x ty_y"
+  //             << std::endl;
+  // debugstream.close();
 
   // Get the number of boundaries
   unsigned n_bound = 2;
@@ -1195,26 +1384,26 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
       Vector<double> boundary_coordinate_of_node;
       for (unsigned n=0; n<nnode;++n)
       {
-	// If on external boundary b
-	if (el_pt->node_pt(n)->is_on_boundary(b))
-	{
-	  boundary_node.push_back(n);
-	  double coord = Parametric_curve_pt[b]
-	    ->get_zeta(el_pt->node_pt(n)->position());
-	  boundary_coordinate_of_node.push_back(coord);
-	}
+        // If on external boundary b
+        if (el_pt->node_pt(n)->is_on_boundary(b))
+        {
+          boundary_node.push_back(n);
+          double coord = Parametric_curve_pt[b]
+            ->get_zeta(el_pt->node_pt(n)->position());
+          boundary_coordinate_of_node.push_back(coord);
+        }
       }
 
       // If the element has nodes on the boundary, rotate the Hermite dofs
       if(!boundary_node.empty())
       {
-	// Rotate the nodes by passing the index of the nodes and the
-	// normal / tangent vectors to the element
-	el_pt->
-	  rotated_boundary_helper_pt()->
-	  set_nodal_boundary_parametrisation(boundary_node,
-					     boundary_coordinate_of_node,
-					     Parametric_curve_pt[b]);
+        // Rotate the nodes by passing the index of the nodes and the
+        // normal / tangent vectors to the element
+        el_pt->
+          rotated_boundary_helper_pt()->
+          set_nodal_boundary_parametrisation(boundary_node,
+                                             boundary_coordinate_of_node,
+                                             Parametric_curve_pt[b]);
       }
     }
   }
@@ -1227,7 +1416,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom()
 //========================================================================
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
-						   std::string& comment)
+                                                   std::string& comment)
 {
   ofstream some_file;
   char filename[100];
@@ -1236,7 +1425,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   unsigned npts = 30;
 
   sprintf(filename,"%s/soln%i.dat",Doc_info.directory().c_str(),
-	  Doc_info.number());
+          Doc_info.number());
   some_file.open(filename);
   Bulk_mesh_pt->output(some_file,npts);
   some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
@@ -1255,10 +1444,10 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   Mesh_as_geom_obj.locate_zeta(r,geom_obj_pt,s);
 
   // Compute the interpolated displacement vector
-  Vector<double> u_0(12,0.0);
-  u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_u_foeppl_von_karman(s);
+  Vector<double> u_0(3,0.0);
+  u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_fvk_disp(s);
 
-  oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[0] << std::endl;
+  oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[2] << std::endl;
 
   Trace_file << Parameters::P_mag << " " << u_0[0] << '\n';
 
@@ -1287,24 +1476,24 @@ int main(int argc, char **argv)
 
   // Poisson Ratio
   CommandLineArgs::specify_command_line_flag("--nu",
-					     &Parameters::Nu);
+                                             &Parameters::Nu);
 
   // Applied Pressure
   CommandLineArgs::specify_command_line_flag("--p",
-					     &Parameters::P_mag);
+                                             &Parameters::P_mag);
 
   // FvK prameter
   CommandLineArgs::specify_command_line_flag("--eta",
-					     &Parameters::Eta);
+                                             &Parameters::Eta);
 
   // Element Area
   double element_area=0.09;
   CommandLineArgs::specify_command_line_flag("--element_area",
-					     &element_area);
+                                             &element_area);
 
   // Order of the boundary interpolation
   CommandLineArgs::specify_command_line_flag("--boundary_order",
-					     &Parameters::Boundary_order);
+                                             &Parameters::Boundary_order);
 
   // Parse command line
   CommandLineArgs::parse_and_assign();
@@ -1320,108 +1509,60 @@ int main(int argc, char **argv)
   }
 
   // Build problem
+  // UnstructuredFvKProblem<NON_WRAPPED_ELEMENT
+  //UnstructuredFvKProblem<FvKPointForceAndSourceElement<NON_WRAPPED_ELEMENT>>
   UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
     problem(element_area);
 
-  // // Doc the dofs
-  // problem.describe_dofs();
 
-  // Set pressure
-  Parameters::P_mag = 1.0;
-  // Set the Poisson ratio
-  Parameters::Nu = 0.5;
+  // Control parameters
+  double dp_mag=0.000001;
+  double dt_mag=0.000001;
+  unsigned nstep=1000;
 
-  // Make problem linear
-  problem.make_linear();
+  // Which case are we doing
+  if (Parameters::Problem_case==Parameters::Clamped_validation)
+  {
+    nstep=1;
+    dp_mag=0.01;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.01;
+    Parameters::T_mag=0.0;
+  }
+  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+  {
+    nstep=100;
+    dp_mag=0.0;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.001;
+    Parameters::T_mag=0.0;
+  }
+  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
+  {
+    nstep=100;
+    dp_mag=0.0;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.001;
+    Parameters::T_mag=0.0;
+  }
 
-  // Solve the system
-  problem.newton_solve();
-  // Document the current solution
-  problem.doc_solution();
+  // Loop
+  for (unsigned i = 0; i < nstep; i++)
+  {
+    oomph_info<< "Solving for P = "
+              << Parameters::P_mag
+              << " ; Tau = "
+              << Parameters::T_mag << "\n";
 
-  // Change the Poisson ratio
-  Parameters::Nu = 0.0;
+    // Do it
+    problem.newton_solve();
 
-  // Solve the system
-  problem.newton_solve();
-  // Document the current solution
-  problem.doc_solution();
+    // Document it
+    problem.doc_solution();
 
-  // // Output the vector of dofs
-  // LinearAlgebraDistribution* dist = problem.dof_distribution_pt();
-  // DoubleVector dofs(dist);
-  // problem.get_dofs(dofs);
-  // dofs.output("solution_dofs.txt");
-
-  // double dp_mag=0.000001;
-  // double dt_mag=0.000001;
-  // unsigned nstep=1000;
-
-
-  // // Which case are we doing
-  // if (Parameters::Problem_case==Parameters::Clamped_validation)
-  // {
-  //   nstep=1;
-  //   dp_mag=0.0;
-  //   dt_mag=0.0;
-  //   Parameters::P_mag=0.0;
-  //   Parameters::T_mag=0.0;
-  // }
-  // //
-  // else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
-  // {
-  //   nstep=100;
-  //   dp_mag=0.0;
-  //   dt_mag=0.000001;
-  //   Parameters::P_mag=0.001;
-  //   Parameters::T_mag=0.0;
-  // }
-  // else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
-  // {
-  //   nstep=100;
-  //   dp_mag=0.0;
-  //   dt_mag=0.000001;
-  //   Parameters::P_mag=0.001;
-  //   Parameters::T_mag=0.0;
-  // }
-
-
-  // // Document
-  // problem.doc_solution();
-
-  // // Loop over all dof types
-  // for(unsigned i=0; i<6; i++)
-  // {
-  //   // Set the boundary conditions
-  //   unsigned nbound = 2;
-  //   for(unsigned b=0;b<nbound;b++)
-  //   {
-  //     const unsigned nb_element = problem.mesh_pt()->nboundary_element(b);
-  //     for(unsigned e=0;e<nb_element;e++)
-  //     {
-  // 	// Get pointer to bulk element adjacent to b
-  // 	FoepplVonKarmanC1CurvableBellElement<4>* el_pt =
-  // 	  dynamic_cast<FoepplVonKarmanC1CurvableBellElement<4>*>
-  // 	  (problem.mesh_pt()->boundary_element_pt(b,e));
-
-  // 	// Change set ith dof to 1 and the rest to 0
-  // 	for(unsigned idof=0; idof<6; ++idof)
-  // 	{
-  // 	  // Cannot set second normal derivative
-  // 	  if(idof==i)
-  // 	  {
-  // 	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_unit_fct);
-  // 	  }
-  // 	  else
-  // 	  {
-  // 	    el_pt->fix_out_of_plane_displacement_dof(idof,b,Parameters::get_null_fct);
-  // 	  }
-  // 	}
-  //     }
-  //   }
-
-  //   // Document
-  //   problem.doc_solution();
-  // }
+    // Bump it
+    Parameters::T_mag+=dt_mag;
+    Parameters::P_mag+=dp_mag;
+  }
 
 } //End of main

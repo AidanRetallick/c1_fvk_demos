@@ -373,39 +373,17 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 {
-  // *********************************************************************
-  // ********** THIS DIAGRAM IS WRONG NOW THAT WE USE L & Alpha **********
-  // *********************************************************************
-  //=================================//
-  //  Rotated square mesh boundary   //
-  //                                 //
-  //                X (0,A)          //
-  //              /   \              //
-  //         e1 /       \ e0         //
-  //          /           \          //
-  // -(A,0) X               X (A,0)  //
-  //          \           /          //
-  //         e2 \       / e3         //
-  //              \   /              //
-  //                X-(0,A)          //
-  //                                 //
-  //                                 //
-  //=================================//
-
-
   // Get the vertices from the parameters
-  Vector<double>
-    vertex0 = Parameters::Vertices[0],
-    vertex1 = Parameters::Vertices[1],
-    vertex2 = Parameters::Vertices[2],
-    vertex3 = Parameters::Vertices[3];
+  Vector<double> vertex0 = Parameters::Vertices[0];
+  Vector<double> vertex1 = Parameters::Vertices[1];
+  Vector<double> vertex2 = Parameters::Vertices[2];
+  Vector<double> vertex3 = Parameters::Vertices[3];
 
   // Declare the edges...
-  Vector<Vector<double>>
-    edge0(2,Vector<double>(2,0.0)),
-    edge1(2,Vector<double>(2,0.0)),
-    edge2(2,Vector<double>(2,0.0)),
-    edge3(2,Vector<double>(2,0.0));
+  Vector<Vector<double>> edge0(2, Vector<double>(2, 0.0));
+  Vector<Vector<double>> edge1(2, Vector<double>(2, 0.0));
+  Vector<Vector<double>> edge2(2, Vector<double>(2, 0.0));
+  Vector<Vector<double>> edge3(2, Vector<double>(2, 0.0));
 
   // ...and assign their endpoints
   edge0[0] = vertex0;
@@ -601,15 +579,6 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
   }
   // Set the boundary conditions
   apply_boundary_conditions();
-
-  // Update the corner constraintes based on boundary conditions
-  unsigned n_el = Constraint_mesh_pt->nelement();
-  for(unsigned i_el = 0; i_el < n_el; i_el++)
-  {
-    dynamic_cast<DuplicateNodeConstraintElement*>
-      (Constraint_mesh_pt->element_pt(i_el))
-      ->validate_and_pin_redundant_constraints();
-  }
 
 } // end of complete
 
@@ -858,6 +827,18 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
     } // end for loop over elements on b
   } // end for loop over boundaries
 
+  // Update the corner constraintes based on boundary conditions
+  unsigned n_el = Constraint_mesh_pt->nelement();
+  for(unsigned i_el = 0; i_el < n_el; i_el++)
+  {
+    dynamic_cast<DuplicateNodeConstraintElement*>
+      (Constraint_mesh_pt->element_pt(i_el))
+      ->validate_and_pin_redundant_constraints();
+  }
+
+  // Assign the equation numbers
+  assign_eqn_numbers();
+
 } // end set bc
 
 
@@ -902,8 +883,8 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
 
 
     // hierher what does this comment mean?
-    // Fill in vertices' positions (this step should be moved inside the curveable
-    // Bell element)
+    // Fill in vertices' positions (this step could be moved inside the
+    // curveable Bell element)
     Vector<Vector<double> > xn(nnode,Vector<double>(2,0.0));
     for(unsigned n=0;n<nnode;++n)
     {
@@ -919,9 +900,6 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
       }
     }// end record boundary nodes
 
-
-    // hierher: ouch! This seems to map (x,y) to zeta! This is at best possible to within
-    // a tolerance. Needs a redesign!
 
     // s at the next (cyclic) node after interior
     const double s_ubar =
