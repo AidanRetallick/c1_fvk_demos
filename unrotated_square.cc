@@ -354,7 +354,6 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 } // end build_mesh
 
 
-
 //==start_of_complete======================================================
 /// Set boundary conditions and complete the build of
 /// all elements
@@ -677,17 +676,8 @@ int main(int argc, char** argv)
   // Set the Poisson ratio
   Parameters::Nu = 0.5;
 
-  // Make problem linear
-  problem.make_linear();
-
-  // Solve the system
-  problem.newton_solve();
-  // Document the current solution
+  // Document the initial state
   problem.doc_solution();
-
-  // Change the Poisson ratio
-  Parameters::Nu = 0.0;
-
   // Solve the system
   problem.newton_solve();
   // Document the current solution

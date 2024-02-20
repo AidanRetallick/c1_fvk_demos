@@ -64,8 +64,7 @@ namespace Parameters
     {L / 2.0 * cos(Alpha) - L / 2.0 * sin(Alpha),
      L / 2.0 * sin(Alpha) + L / 2.0 * cos(Alpha)},
     {-L / 2.0 * cos(Alpha) - L / 2.0 * sin(Alpha),
-     -L / 2.0 * sin(Alpha) + L / 2.0 * cos(Alpha)}
-  };
+     -L / 2.0 * sin(Alpha) + L / 2.0 * cos(Alpha)}};
 
   /// The plate thickness
   double Thickness = 0.01;
@@ -122,13 +121,8 @@ namespace Parameters
   CurvilineLine Edge_3(Vertices[3], Vertices[0]);
 
   /// Vector container of addresses for iterating over the edges
-  Vector<CurvilineGeomObject*> Curviline_edge_pt =
-  {
-    &Edge_0,
-    &Edge_1,
-    &Edge_2,
-    &Edge_3
-  };
+  Vector<CurvilineGeomObject*> Curviline_edge_pt = {
+    &Edge_0, &Edge_1, &Edge_2, &Edge_3};
 
 
   //-------- Boundary conditions -----------------------------------------------
@@ -380,8 +374,8 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 
   // Split elements that have two boundary edges
   TimeStepper* time_stepper_pt = Bulk_mesh_pt->Time_stepper_pt;
-  Bulk_mesh_pt->
-    template split_elements_with_multiple_boundary_edges<ELEMENT>(time_stepper_pt);
+  Bulk_mesh_pt->template split_elements_with_multiple_boundary_edges<ELEMENT>(
+    time_stepper_pt);
 
   // Create the empty constraint element mesh
   Constraint_mesh_pt = new Mesh();
@@ -389,7 +383,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   // Add extra nodes at boundaries and constrain the dofs there.
   duplicate_corner_nodes();
 
-  //Add submesh to problem
+  // Add submesh to problem
   add_sub_mesh(Bulk_mesh_pt);
   add_sub_mesh(Constraint_mesh_pt);
 
@@ -432,7 +426,6 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
 } // end of complete
 
 
-
 //==============================================================================
 /// Duplicate nodes at corners in order to properly apply boundary
 /// conditions from each edge. Also adds (8) Lagrange multiplier dofs to the
@@ -440,15 +433,15 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
 /// vertex dofs. (Note "corner" here refers to the meeting point of any two
 /// sub-boundaries in the closed external boundary)
 //==============================================================================
-template <class ELEMENT>
-void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
+template<class ELEMENT>
+void UnstructuredFvKProblem<ELEMENT>::duplicate_corner_nodes()
 {
   // Loop over the sections of the external boundary
   unsigned n_bound = 4;
-  for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
+  for (unsigned i_bound = 0; i_bound < n_bound; i_bound++)
   {
     // Store the index of the next boundary
-    unsigned ip1_bound = (i_bound+1)%n_bound;
+    unsigned ip1_bound = (i_bound + 1) % n_bound;
     // Storage for node and el pts at the boundary vertex
     Node* old_node_pt = 0;
     Node* new_node_pt = 0;
@@ -464,20 +457,20 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
     //----------------------------------------------------------------------
     // First, find corner the node
     unsigned n_b_node = Bulk_mesh_pt->nboundary_node(i_bound);
-    for(unsigned i_b_node = 0; i_b_node < n_b_node; i_b_node++)
+    for (unsigned i_b_node = 0; i_b_node < n_b_node; i_b_node++)
     {
       // Store the node we are checking
-      Node* node_pt = Bulk_mesh_pt->boundary_node_pt(i_bound,i_b_node);
+      Node* node_pt = Bulk_mesh_pt->boundary_node_pt(i_bound, i_b_node);
 
       // If it is on the next boundary we have found the corner node
-      if(node_pt->is_on_boundary(ip1_bound))
+      if (node_pt->is_on_boundary(ip1_bound))
       {
         // [zdec] debug
-        oomph_info << "Found a corner node at " << std::endl << "  ("
-                   << node_pt->position(0) << "," << node_pt->position(1) << ")"
-                   << std::endl;
+        oomph_info << "Found a corner node at " << std::endl
+                   << "  (" << node_pt->position(0) << ","
+                   << node_pt->position(1) << ")" << std::endl;
         old_node_pt = node_pt;
-	break;
+        break;
       }
     }
 
@@ -487,7 +480,8 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
     for (unsigned i_b_el = 0; i_b_el < n_b_el; i_b_el++)
     {
       // Get the element pointer
-      FiniteElement* el_pt = Bulk_mesh_pt->boundary_element_pt(ip1_bound, i_b_el);
+      FiniteElement* el_pt =
+        Bulk_mesh_pt->boundary_element_pt(ip1_bound, i_b_el);
       // If the corner node pt is in the element we have found the right
       // element
       if (el_pt->get_node_number(old_node_pt) != -1)
@@ -505,14 +499,14 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
     // Copy the position and other info from the old node into the new node
     // [debug]
     oomph_info << "About to copy node data" << std::endl;
-    new_node_pt->x(0)=old_node_pt->x(0);
-    new_node_pt->x(1)=old_node_pt->x(1);
+    new_node_pt->x(0) = old_node_pt->x(0);
+    new_node_pt->x(1) = old_node_pt->x(1);
     oomph_info << "Copied node data" << std::endl;
     // Then we add this node to the mesh
     Bulk_mesh_pt->add_node_pt(new_node_pt);
     // Then replace the old node for the new one on the right boundary
-    Bulk_mesh_pt->remove_boundary_node(ip1_bound,old_node_pt);
-    Bulk_mesh_pt->add_boundary_node(ip1_bound,new_node_pt);
+    Bulk_mesh_pt->remove_boundary_node(ip1_bound, old_node_pt);
+    Bulk_mesh_pt->add_boundary_node(ip1_bound, new_node_pt);
 
     //----------------------------------------------------------------------
     // The final job is to constrain this duplication using the specialised
@@ -524,10 +518,10 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
       Parameters::Curviline_edge_pt[ip1_bound];
 
     // Get the coordinates on each node on their respective boundaries
-    Vector<double> left_boundary_coordinate =
-      {left_parametrisation_pt->get_zeta(old_node_pt->position())};
-    Vector<double> right_boundary_coordinate =
-      {right_parametrisation_pt->get_zeta(new_node_pt->position())};
+    Vector<double> left_boundary_coordinate = {
+      left_parametrisation_pt->get_zeta(old_node_pt->position())};
+    Vector<double> right_boundary_coordinate = {
+      right_parametrisation_pt->get_zeta(new_node_pt->position())};
 
     // Create the constraining element
     DuplicateNodeConstraintElement* constraint_element_pt =
@@ -542,7 +536,6 @@ void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
     Constraint_mesh_pt->add_element_pt(constraint_element_pt);
   }
 }
-
 
 
 //==============================================================================
@@ -602,7 +595,6 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom(
     }
   }
 } // end rotate_edge_degrees_of_freedom
-
 
 
 //==start_of_apply_bc=====================================================

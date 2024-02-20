@@ -105,25 +105,25 @@ namespace Parameters
   Vector<Vector<double>> Vertices{{1.0, 0.0}, {0.0, 1.0}, {0.0, 0.0}};
 
   /// Edge 0 of the triangle
-  CurvilineLine Edge_0(Vertices[1],Vertices[2]);
+  CurvilineLine Edge_0(Vertices[1], Vertices[2]);
 
   /// Edge 1 of the triangle
-  CurvilineLine Edge_1(Vertices[2],Vertices[0]);
+  CurvilineLine Edge_1(Vertices[2], Vertices[0]);
 
   /// Edge 2 of the triangle
-  CurvilineLine Edge_2(Vertices[0],Vertices[1]);
+  CurvilineLine Edge_2(Vertices[0], Vertices[1]);
 
   /// Curved Edge 2 of the triangle
-  CurvilineEllipseTop Curved_edge_2(1.0,1.0);
+  CurvilineEllipseTop Curved_edge_2(1.0, 1.0);
 
   /// Vector container used to iterate over the edges
-  Vector<CurvilineGeomObject*> Parametric_curve_pt = {&Edge_0, &Edge_1, &Edge_2};
+  Vector<CurvilineGeomObject*> Parametric_curve_pt = {
+    &Edge_0, &Edge_1, &Edge_2};
 
 
   //                           PROBLEM DEFINITIONS
   /// Assigns the value of pressure depending on the position (x,y)
-  void
-  get_pressure(const Vector<double>& x, double& pressure)
+  void get_pressure(const Vector<double>& x, double& pressure)
   {
     // No pressure
     pressure = P_mag;
@@ -145,7 +145,7 @@ namespace Parameters
   }
 
   /// Get zero for homogenous bcs
-  void get_null_fct(const Vector<double> &x, double &zero)
+  void get_null_fct(const Vector<double>& x, double& zero)
   {
     zero = 0.0;
   }
