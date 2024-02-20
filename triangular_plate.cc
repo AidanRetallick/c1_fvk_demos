@@ -28,6 +28,8 @@
 // LIC//
 // LIC//====================================================================
 
+// Strings
+#include <string.h>
 // Floating point environment
 #include <fenv.h>
 
@@ -93,23 +95,31 @@ namespace Parameters
   double Boundary_amp = 0.1;
 
   /// Magnitude of pressure
-  double P_mag = 10.0;
+  double P_mag = 0.0;
 
   //                     PARAMETRIC BOUNDARY DEFINITIONS
   // Here we create the geom objects for the Parametric Boundary Definition
   // (needed to update boundary elements to curved)
 
-  /// Curved arc of sector
-  CurvilineCircleTop Circular_arc;
+  /// Vertices
+  Vector<Vector<double>> Vertices{{1.0, 0.0}, {0.0, 1.0}, {0.0, 0.0}};
 
-  /// The lower (x-axis) radius
-  CurvilineLine Lower_line(0.0, false);
+  /// Edge 0 of the triangle
+  CurvilineLine Edge_0(Vertices[1], Vertices[2]);
 
-  /// The upper radial line
-  CurvilineLine Upper_line(Alpha, true);
+  /// Edge 1 of the triangle
+  CurvilineLine Edge_1(Vertices[2], Vertices[0]);
 
+  /// Edge 2 of the triangle
+  CurvilineLine Edge_2(Vertices[0], Vertices[1]);
+
+  /// Curved Edge 2 of the triangle
+  CurvilineEllipseTop Curved_edge_2(1.0, 1.0);
+
+  /// Vector container used to iterate over the edges
   Vector<CurvilineGeomObject*> Parametric_curve_pt = {
-    &Lower_line, &Circular_arc, &Upper_line};
+    &Edge_0, &Edge_1, &Edge_2};
+
 
   //                           PROBLEM DEFINITIONS
   /// Assigns the value of pressure depending on the position (x,y)
@@ -134,54 +144,10 @@ namespace Parameters
     grad[1] = 0.0;
   }
 
-  // This metric will flag up any non--axisymmetric parts
-  void axiasymmetry_metric(const Vector<double>& x,
-                           const Vector<double>& u,
-                           const Vector<double>& u_exact,
-                           double& error,
-                           double& norm)
+  /// Get zero for homogenous bcs
+  void get_null_fct(const Vector<double>& x, double& zero)
   {
-    // We use the theta derivative of the out of plane deflection
-    error =
-      pow((-x[1] * u[1] + x[0] * u[2]) / sqrt(x[0] * x[0] + x[1] * x[1]), 2);
-    norm =
-      pow((x[0] * u[1] + x[1] * u[2]) / sqrt(x[0] * x[0] + x[1] * x[1]), 2);
-  }
-
-  /// Get the exact solution(s)
-  void dummy_exact_w(const Vector<double>& x, Vector<double>& exact_w)
-  {
-    // Do nothing -> no exact solution in this case
-  }
-
-  //---------------------------------------------------------------------
-  // Functions to assign boundary conditions
-  // (e.g. sin along arc 0<theta<Alpha)
-
-  /// Sin along circular arc for w BC
-  void get_w_along_arc(const Vector<double>& x, double& value)
-  {
-    value = Boundary_amp * sin(2.0 * Pi * atan2(x[1], x[0]) / Alpha);
-  }
-
-  /// Cos along circular arc for dw/dt BC
-  void get_dwdt_along_arc(const Vector<double>& x, double& value)
-  {
-    value = 2.0 * Pi / Alpha * Boundary_amp *
-            cos(2.0 * Pi * atan2(x[1], x[0]) / Alpha);
-  }
-
-  /// -Sin along circular arc for d2w/dt2 BC
-  void get_d2wdt2_along_arc(const Vector<double>& x, double& value)
-  {
-    value = -pow(2.0 * Pi / Alpha, 2.0) * Boundary_amp *
-            sin(2.0 * Pi * atan2(x[1], x[0]) / Alpha);
-  }
-
-  /// Null function for any zero (homogenous) BCs
-  void get_null_fct(const Vector<double>& x, double& value)
-  {
-    value = 0.0;
+    zero = 0.0;
   }
 
 } // namespace Parameters
@@ -218,9 +184,6 @@ public:
   /// Setup and build the mesh
   void build_mesh();
 
-  /// Duplicate corner nodes and create constraint elements at those corners
-  void duplicate_corner_nodes();
-
   /// Update after solve (empty)
   void actions_after_newton_solve()
   {
@@ -234,8 +197,58 @@ public:
   /// Empty as the boundary conditions stay fixed
   void actions_before_newton_solve()
   {
-    // Reapply boundary conditions
+    //    // Reapply boundary conditions
+    //    apply_boundary_conditions();
+  }
+
+  /// [zdec] temp
+  void actions_before_newton_step()
+  {
+    // Filenames
+    char res_filename[100];
+    char jac_filename[100];
+    sprintf(res_filename, "res_%i_%i", Doc_info.number(), Nnewton_iter_taken);
+    sprintf(jac_filename, "jac_%i_%i", Doc_info.number(), Nnewton_iter_taken);
+    // Get the jacobian
+    LinearAlgebraDistribution* dist = this->dof_distribution_pt();
+    DoubleVector res(dist, 0.0);
+    CRDoubleMatrix jac(dist);
+    get_jacobian(res, jac);
+    res.output(res_filename);
+    jac.sparse_indexed_output(jac_filename);
+  }
+
+  /// Update the boundary conditions along with the constraints and eqn
+  /// numbering
+  void update_boundary_conditions()
+  {
+    // Reset by unpinning all the nodal dofs in the mesh
+    unsigned n_node = Bulk_mesh_pt->nnode();
+    for (unsigned i_node = 0; i_node < n_node; i_node++)
+    {
+      Bulk_mesh_pt->node_pt(i_node)->unpin_all();
+    }
+
+    // Apply the new boundary conditions
     apply_boundary_conditions();
+
+    // Pin in-plane displacements throughout the bulk
+    if (Solve_linear_bending)
+    {
+      pin_all_in_plane_displacements();
+    }
+
+    // Update the corner constraintes based on boundary conditions
+    unsigned n_el = Constraint_mesh_pt->nelement();
+    for (unsigned i_el = 0; i_el < n_el; i_el++)
+    {
+      dynamic_cast<DuplicateNodeConstraintElement*>(
+        Constraint_mesh_pt->element_pt(i_el))
+        ->validate_and_pin_redundant_constraints();
+    }
+
+    // Update the equation numbering
+    assign_eqn_numbers();
   }
 
   /// Doc the solution
@@ -263,18 +276,8 @@ private:
   /// The closed outer boundary
   TriangleMeshClosedCurve* Boundary_pt;
 
-  /// Actions to be performed after read in of meshes
-  void actions_after_read_unstructured_meshes()
-  {
-    // Curved Edges need to be upgraded after the rebuild
-    upgrade_edge_elements_to_curve(Circular_arc_bnum, Bulk_mesh_pt);
-    // Rotate degrees of freedom
-    rotate_edge_degrees_of_freedom();
-    // Make the problem fully functional
-    complete_problem_setup();
-    // Apply any boundary conditions
-    apply_boundary_conditions();
-  }
+  /// Duplicate corner nodes and create constraint elements at those corners
+  void duplicate_corner_nodes();
 
   /// Helper function to apply boundary conditions
   void apply_boundary_conditions();
@@ -293,9 +296,9 @@ private:
   /// Keep track of boundary ids
   enum
   {
-    Straight_edge_0_bnum = 0,
-    Circular_arc_bnum = 1,
-    Straight_edge_1_bnum = 2
+    Edge_0_bnum = 0,
+    Edge_1_bnum = 1,
+    Edge_2_bnum = 2
   };
 
   /// Maximum element area size
@@ -337,7 +340,7 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
   build_mesh();
 
   // Curved Edge upgrade
-  upgrade_edge_elements_to_curve(Circular_arc_bnum, Bulk_mesh_pt);
+  upgrade_edge_elements_to_curve(Edge_2_bnum, Bulk_mesh_pt);
 
   // Rotate degrees of freedom
   rotate_edge_degrees_of_freedom();
@@ -351,30 +354,20 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
 
   oomph_info << "Number of equations: " << assign_eqn_numbers() << '\n';
 
-  // Doc the equatiuons
-  describe_dofs();
+  // // Doc the equatiuons
+  // describe_dofs();
 
 } // end Constructor
 
 
+//==============================================================================
 /// Set up and build the mesh
+//==============================================================================
 template<class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT>::build_mesh()
 {
-  Vector<double> zeta(1);
-  Vector<double> posn(2);
-
-  // Opening angle
-  double alpha = Parameters::Alpha;
-
-  // Vertices
+  // Storage for endpoints of each edge
   Vector<Vector<double>> endpoints(2);
-  Vector<double> corner(2, 0.0);
-  Vector<double> arc_start(2, 0.0);
-  Vector<double> arc_end(2, 0.0);
-  arc_start[0] = 1.0;
-  arc_end[0] = cos(alpha);
-  arc_end[1] = sin(alpha);
 
   // Sector of a circle with radius 1
   double A = 1.0;
@@ -384,28 +377,23 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   // Three boundary lines
   Outer_boundary_curvilines_pt.resize(3);
 
-  // Straight boundary 0 (lower)
-  endpoints[0] = corner;
-  endpoints[1] = arc_start;
-  Outer_boundary_curvilines_pt[Straight_edge_0_bnum] =
-    new TriangleMeshPolyLine(endpoints, Straight_edge_0_bnum);
+  // Straight boundary 0
+  endpoints[0] = Parameters::Vertices[1];
+  endpoints[1] = Parameters::Vertices[2];
+  Outer_boundary_curvilines_pt[Edge_0_bnum] =
+    new TriangleMeshPolyLine(endpoints, Edge_0_bnum);
 
-  // Straight boundary 1 (upper)
-  endpoints[0] = arc_end;
-  endpoints[1] = corner;
-  Outer_boundary_curvilines_pt[Straight_edge_1_bnum] =
-    new TriangleMeshPolyLine(endpoints, Straight_edge_1_bnum);
+  // Straight boundary 1
+  endpoints[0] = Parameters::Vertices[2];
+  endpoints[1] = Parameters::Vertices[0];
+  Outer_boundary_curvilines_pt[Edge_1_bnum] =
+    new TriangleMeshPolyLine(endpoints, Edge_1_bnum);
 
-  // Curved arc boundary
-  double zeta_start = 0.0;
-  double zeta_end = alpha;
-  unsigned nsegment = 1.0; //(int)(Pi/sqrt(Element_area));
-  Outer_boundary_curvilines_pt[Circular_arc_bnum] =
-    new TriangleMeshCurviLine(Outer_boundary_ellipse_pt,
-                              zeta_start,
-                              zeta_end,
-                              nsegment,
-                              Circular_arc_bnum);
+  // Straight boundary 2
+  endpoints[0] = Parameters::Vertices[0];
+  endpoints[1] = Parameters::Vertices[1];
+  Outer_boundary_curvilines_pt[Edge_2_bnum] =
+    new TriangleMeshPolyLine(endpoints, Edge_2_bnum);
 
   // Form closed curve from components
   Boundary_pt = new TriangleMeshClosedCurve(Outer_boundary_curvilines_pt);
@@ -572,11 +560,10 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
     // Set the pressure function pointers and the physical constants
     el_pt->pressure_fct_pt() = &Parameters::get_pressure;
     el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
-    // There is no error metric in this case
-    el_pt->error_metric_fct_pt() = &Parameters::axiasymmetry_metric;
     el_pt->nu_pt() = &Parameters::Nu;
     if (Solve_linear_bending)
     {
+      cout << "Solving linear bending problem" << endl;
       el_pt->eta_pt() = &Parameters::Eta_linear;
     }
     else
@@ -617,14 +604,6 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // The free boundary condition is completely unpinned
   static const Vector<unsigned> free{};
 
-  // In-plane dofs:
-  // |  0  |  1  |
-  // |  un |  ut |
-  // Possible boundary conditions on the in-plane displacement
-  static const Vector<unsigned> pin_un_dofs{0};
-  static const Vector<unsigned> pin_ut_dofs{1};
-  static const Vector<unsigned> pin_inplane_dofs{0, 1};
-
   // Out-of-plane dofs:
   // |  0  |  1  |  2  |  3  |  4  |  5  |
   // |  w  | w_n | w_t | w_nn| w_nt| w_tt|
@@ -633,121 +612,30 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   static const Vector<unsigned> sliding_clamp_dofs{1, 4};
   static const Vector<unsigned> true_clamp_dofs{0, 1, 2, 4, 5};
 
-  //----------------------------------------------------------------------------
-  // Assign boundary conditions to each edge (do circular arc manually)
-  Vector<unsigned> straight_edge_0_pinned_u_dofs = pin_inplane_dofs;
-  Vector<unsigned> straight_edge_1_pinned_u_dofs = pin_inplane_dofs;
-  Vector<unsigned> circular_arc_pinned_u_dofs = pin_inplane_dofs;
-  Vector<unsigned> straight_edge_0_pinned_w_dofs = resting_pin_dofs;
-  Vector<unsigned> straight_edge_1_pinned_w_dofs = free; // resting_pin_dofs;
-  // Vector<unsigned> circular_arc_pinned_w_dofs = true_clamp_dofs;
+  // Which one are we actually using
+  Vector<unsigned> applied_bc = true_clamp_dofs;
 
-  // Allocate storage for the number of elements and dofs
-  unsigned n_b_element = 0;
-  unsigned n_pinned_u_dofs = 0;
-  unsigned n_pinned_w_dofs = 0;
-
-  // Loop over the circular arc elements
-  n_b_element = Bulk_mesh_pt->nboundary_element(Circular_arc_bnum);
-  n_pinned_u_dofs = circular_arc_pinned_u_dofs.size();
-  // n_pinned_w_dofs = circular_arc_pinned_w_dofs.size();
-  for (unsigned e = 0; e < n_b_element; e++)
+  // Loop over the straight boundaries
+  for (unsigned i_bound = 0; i_bound < 3; i_bound++)
   {
-    // Get pointer to bulk element adjacent to curved arc
-    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(
-      Bulk_mesh_pt->boundary_element_pt(Circular_arc_bnum, e));
+    // Loop over straight side elements and apply homogenous BCs
+    unsigned n_b_element = Bulk_mesh_pt->nboundary_element(i_bound);
+    unsigned n_pinned_w_dofs = applied_bc.size();
+    for (unsigned e = 0; e < n_b_element; e++)
+    {
+      // Get pointer to bulk element adjacent to b
+      ELEMENT* el_pt =
+        dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(i_bound, e));
 
-    // Pin in-plane dofs
-    for (unsigned i = 0; i < n_pinned_u_dofs; i++)
-    {
-      unsigned idof = circular_arc_pinned_u_dofs[i];
-      el_pt->fix_in_plane_displacement_dof(
-        idof, Circular_arc_bnum, Parameters::get_null_fct);
-    }
-    // Pin out-of-plane dofs (resting pin -- only set tangent derivatives)
-    for (unsigned idof = 0; idof < 6; ++idof)
-    {
-      switch (idof)
+      // Pin out-of-plane dofs
+      for (unsigned j_dof = 0; j_dof < n_pinned_w_dofs; j_dof++)
       {
-          // [hierher] Make function of arclength rather than global x
-        case 0:
-          // w
-          el_pt->fix_out_of_plane_displacement_dof(
-            idof, Circular_arc_bnum, Parameters::get_w_along_arc);
-          // Parameters::get_null_fct);
-          break;
-        case 2:
-          // dwdt
-          el_pt->fix_out_of_plane_displacement_dof(
-            idof, Circular_arc_bnum, Parameters::get_dwdt_along_arc);
-          // Parameters::get_null_fct);
-          break;
-        case 5:
-          // d2wdt2
-          el_pt->fix_out_of_plane_displacement_dof(
-            idof, Circular_arc_bnum, Parameters::get_d2wdt2_along_arc);
-          // Parameters::get_null_fct);
-          break;
-        default:
-          // Leave free
-          break;
-      } // End of switch-case [idof]
-    } // End loop over dofs [idof]
-  } // End loop over boundary elements [e]
-
-  // Loop over straight side 0 elements and apply homogenous BCs
-  n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_0_bnum);
-  n_pinned_u_dofs = straight_edge_0_pinned_u_dofs.size();
-  n_pinned_w_dofs = straight_edge_0_pinned_w_dofs.size();
-  for (unsigned e = 0; e < n_b_element; e++)
-  {
-    // Get pointer to bulk element adjacent to b
-    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(
-      Bulk_mesh_pt->boundary_element_pt(Straight_edge_0_bnum, e));
-
-    // Pin in-plane dofs
-    for (unsigned i = 0; i < n_pinned_u_dofs; i++)
-    {
-      unsigned idof = straight_edge_0_pinned_u_dofs[i];
-      el_pt->fix_in_plane_displacement_dof(
-        idof, Straight_edge_0_bnum, Parameters::get_null_fct);
-    } // End loop over in-plane dofs [i]
-      // Pin out-of-plane dofs
-    for (unsigned i = 0; i < n_pinned_w_dofs; i++)
-    {
-      unsigned idof = straight_edge_0_pinned_w_dofs[i];
-      el_pt->fix_out_of_plane_displacement_dof(
-        idof, Straight_edge_0_bnum, Parameters::get_null_fct);
-    } // End loop over out-of-plane dofs [i]
-  } // End loop over boundary elements [e]
-
-  // Loop over straight side 1 elements and apply homogenous BCs
-  n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_1_bnum);
-  n_pinned_u_dofs = straight_edge_1_pinned_u_dofs.size();
-  n_pinned_w_dofs = straight_edge_1_pinned_w_dofs.size();
-  for (unsigned e = 0; e < n_b_element; e++)
-  {
-    // Get pointer to bulk element adjacent to b
-    ELEMENT* el_pt = dynamic_cast<ELEMENT*>(
-      Bulk_mesh_pt->boundary_element_pt(Straight_edge_1_bnum, e));
-
-    // Pin in-plane dofs
-    for (unsigned i = 0; i < n_pinned_u_dofs; i++)
-    {
-      unsigned idof = straight_edge_1_pinned_u_dofs[i];
-      el_pt->fix_in_plane_displacement_dof(
-        idof, Straight_edge_1_bnum, Parameters::get_null_fct);
-    } // End loop over in-plane dofs [i]
-      // Pin out-of-plane dofs
-    for (unsigned i = 0; i < n_pinned_w_dofs; i++)
-    {
-      unsigned idof = straight_edge_1_pinned_w_dofs[i];
-      el_pt->fix_out_of_plane_displacement_dof(
-        idof, Straight_edge_1_bnum, Parameters::get_null_fct);
-    } // End loop over out-of-plane dofs [i]
-  } // End loop over boundary elements [e]
-
-
+        unsigned dof = applied_bc[j_dof];
+        el_pt->fix_out_of_plane_displacement_dof(
+          dof, i_bound, Parameters::get_null_fct);
+      } // End loop over out-of-plane dofs [j_dof]
+    } // End loop over boundary elements [e]
+  } // End loop over boundaries [i_bound]
 } // end set bc
 
 
@@ -777,8 +665,8 @@ void UnstructuredFvKProblem<ELEMENT>::upgrade_edge_elements_to_curve(
   // Define the functions for each part of the boundary
   switch (ibound)
   {
-    case Circular_arc_bnum:
-      parametric_curve_pt = &Parameters::Circular_arc;
+    case Edge_2_bnum:
+      parametric_curve_pt = &Parameters::Edge_2;
       break;
     default:
       throw OomphLibError("Unexpected boundary number. Please add additional \
@@ -813,7 +701,7 @@ curved boundaries as required.",
       xn[n][1] = nod_pt->x(1);
 
       // Check if it is on the curved boundary
-      if (!(nod_pt->is_on_boundary(Circular_arc_bnum)))
+      if (!(nod_pt->is_on_boundary(Edge_2_bnum)))
       {
         index_of_interior_node = n;
         nnode_not_on_curved_boundary++;
@@ -956,30 +844,13 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const std::string& comment)
   char filename[100];
 
   // Number of plot points
-  unsigned npts = 5;
+  unsigned npts = 10;
 
-  sprintf(filename, "RESLT/soln%i-%f.dat", Doc_info.number(), Element_area);
+  sprintf(filename, "RESLT/soln%i.dat", Doc_info.number());
   some_file.open(filename);
   Bulk_mesh_pt->output(some_file, npts);
   some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \"" << comment << "\"\n";
   some_file.close();
-
-  // Doc error and return of the square of the L2 error
-  //---------------------------------------------------
-  // double error,norm,dummy_error,zero_norm;
-  double dummy_error, zero_norm;
-  sprintf(filename, "RESLT/error%i-%f.dat", Doc_info.number(), Element_area);
-  some_file.open(filename);
-
-  Bulk_mesh_pt->compute_error(
-    some_file, Parameters::dummy_exact_w, dummy_error, zero_norm);
-  some_file.close();
-
-  // Doc L2 error and norm of solution
-  oomph_info << "Absolute norm of computed solution: " << sqrt(dummy_error)
-             << std::endl;
-
-  oomph_info << "Norm of computed solution: " << sqrt(zero_norm) << std::endl;
 
   // Find the solution at r=0
   //   // ----------------------
@@ -997,17 +868,6 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const std::string& comment)
              << std::endl;
 
   Trace_file << u_0[0] << '\n';
-
-  // Doc error and return of the square of the L2 error
-  //---------------------------------------------------
-  sprintf(filename, "RESLT/L2-norm%i-%f.dat", Doc_info.number(), Element_area);
-  some_file.open(filename);
-
-  some_file << "### L2 Norm\n";
-  some_file << "##  Format: err^2 norm^2 \n";
-  // Print error in prescribed format
-  some_file << dummy_error << " " << zero_norm << "\n";
-  some_file.close();
 
   // Increment the doc_info number
   Doc_info.number()++;
@@ -1041,8 +901,8 @@ int main(int argc, char** argv)
   // Applied Pressure
   CommandLineArgs::specify_command_line_flag("--eta", &Parameters::Eta);
 
-  // Element Area (no larger element than 0.09)
-  double element_area = 1.0;
+  // Element Area (no larger element than)
+  double element_area = 0.02;
   CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
 
   // Parse command line
@@ -1055,22 +915,27 @@ int main(int argc, char** argv)
 
   // Set up some problem paramters
   problem.max_residuals() = 1e3;
-  problem.max_newton_iterations() = 20;
+  problem.max_newton_iterations() = 30;
 
+  // Set pressure
+  Parameters::P_mag = 10.0;
+  // Set Poisson ratio
+  Parameters::Nu = 0.5;
+  // Solve the system
+  problem.newton_solve();
+  // Document the current solution
+  problem.doc_solution();
+
+  // Set Poisson ratio
+  Parameters::Nu = 0.0;
+  // Solve the system
+  problem.newton_solve();
+  // Document the current solution
+  problem.doc_solution();
   // Pre mess doc
   problem.doc_solution();
 
-  // Do the newton solve
-  problem.steady_newton_solve();
 
-  // Document
-  problem.doc_solution();
-  oomph_info << std::endl;
-  oomph_info << "---------------------------------------------" << std::endl;
-  oomph_info << "Solution number (" << problem.Doc_info.number() - 1 << ")"
-             << std::endl;
-  oomph_info << "---------------------------------------------" << std::endl;
-  oomph_info << std::endl;
   // Print success
   oomph_info << "Exiting Normally\n";
 } // End of main
