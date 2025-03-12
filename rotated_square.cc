@@ -229,6 +229,7 @@ public:
   /// Overloaded version of the problem's access function to
   /// the mesh. Recasts the pointer to the base Mesh object to
   /// the actual mesh type.
+  // hierher
   TriangleMesh<ELEMENT>* mesh_pt()
   {
     return Bulk_mesh_pt;
@@ -677,8 +678,24 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //
   //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
   //
-  // hierher complete once Aidan has signed off the explanation above.
-  // [zdec] "This is all good." -- Aidan
+  // assigns boundary conditions for the out-of-plane displacements via
+  // the specification of
+  //
+  // idof   : the enumeration of the dof in the scheme listed above,
+  //          so idof can take values 0, 1. 2, 3, 4 or 5
+  // b      : the mesh boundary along which the boundary condition is
+  //          to be applied
+  // fct_pt : a function pointer to a global function with arguments
+  //          (const Vector<double> x, double& value) which computes
+  //          the value for the relevant out-of-plane displacement (or 
+  //          its derivative; depending on what the dof represents) as a
+  //          function of the coordinate, x, a 2D vector. 
+  //
+  // So, if the function fix_out_of_plane_displacement_dof(idof, b, fct_pt) is called 
+  // with idof=2 and b=3, say, the tangential-derivative of the out-of-plane displacement 
+  // is pinned for all the element's nodes (if any) that are located on mesh boundary 3. 
+  // The value of this derivative is set to whatever the function pointed to by fct_pt 
+  // computes when evaluated at the nodal coordinate. 
   //
   // Using the conventions introduced above, the following vectors identify
   // the in-plane and out-of-plane degrees of freedom to be pinned for
@@ -743,7 +760,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   Vector<Vector<unsigned>> pinned_w_dofs(4);
 
   // Pin both in-plane displacements everywhere
-  pinned_u_dofs[0] = pin_ux_and_uy_pinned_dof;
+  pinned_u_dofs[0] = pin_ux_and_uy_pinned_dof; // hierher. Maybe we should rotate these too?
   pinned_u_dofs[1] = pin_ux_and_uy_pinned_dof;
   pinned_u_dofs[2] = pin_ux_and_uy_pinned_dof;
   pinned_u_dofs[3] = pin_ux_and_uy_pinned_dof;
