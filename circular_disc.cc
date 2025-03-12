@@ -1374,13 +1374,6 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
       }
     }// end record boundary nodes
 
-
-    // hierher: ouch! This seems to map (x,y) to zeta! This is at best possible
-    // to within a tolerance. Needs a redesign!
-
-    // aidan: Inverse exists for (x,y) in map image (the boundary), so shouldn't
-    // this be fine for boundary nodes?
-
     // s at the next (cyclic) node after interior
     const double s_ubar = parametric_curve_pt->get_zeta(xn[(index_of_interior_node+1) % 3]);
 

@@ -377,7 +377,6 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
     // Assign the parameter pointers for the element
     el_pt->nu_pt() = &Parameters::Nu;
     el_pt->eta_pt() = &Parameters::Eta;
-
   }
 
   // Set the boundary conditions
