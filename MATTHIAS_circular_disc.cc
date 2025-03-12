@@ -494,29 +494,27 @@ namespace Parameters
   {
     Clamped_validation,
     Axisymmetric_shear_buckling,
-    Nonaxisymmetric_shear_buckling,
-    Custom1 // quadratic
+    Nonaxisymmetric_shear_buckling
   };
 
   /// Which case are we doing
-  unsigned Problem_case = Custom1;// Clamped_validation; // Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
+  unsigned Problem_case=Clamped_validation; // Nonaxisymmetric_shear_buckling; // Axisymmetric_shear_buckling;
 
-  /// Ellipse half x-axis
+  // Ellipse half axis
   double A = 1.0;
 
-  /// Ellipse half y-axis
+  // Other ellipse half axis
   double B = 1.0;
 
   /// Poisson ratio
   double Nu = 0.5;
 
-  // /// Nondimensional thickness of plate
-  double Thickness = 0.01;
+  // /// Membrane coupling coefficient (this should really be computed
+  // /// as a dependent parameter...)
+  // double Eta = 12.0*(1.0-Nu*Nu)/(Thickness*Thickness);
 
-  /// Membrane coupling coefficient (this should really be computed
-  /// as a dependent parameter...)
-  double Eta = 12.0 * (1.0 - Nu * Nu) / (Thickness * Thickness);
-  //double Eta = 2.39e6;
+  // FvK parameter
+  double Eta=2.39e6;
 
   /// Pressure magnitude
   double P_mag = 0.0;
@@ -524,12 +522,8 @@ namespace Parameters
   /// In-plane traction magnitude
   double T_mag = 0.0;
 
-  /// Element area
-  double Element_area = 0.5;
-
   /// Order of boundary interpolation
-  unsigned Boundary_order = 5;
-
+  unsigned Boundary_order = 3;
 
   // hierher what are these objects? Shouldn't they be
   // used in the mesh generatino too; surely they encode the
@@ -549,9 +543,6 @@ namespace Parameters
   };
 
 
-  /// Error function
-
-
   /// Pressure depending on the position (x,y)
   void get_pressure(const Vector<double>& x, double& pressure)
   {
@@ -569,13 +560,6 @@ namespace Parameters
     else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
     {
       pressure = P_mag*(0.25-x[0]*x[0]-x[1]*x[1]);
-    }
-    else if (Parameters::Problem_case==Parameters::Custom1)
-    {
-      pressure = 4.0 * pow(P_mag,3) * Eta * (27.0*pow(x[0],5)
-					     + 3.0*pow(x[0],4)
-					     + 4.0*x[0]*x[1]*x[1]
-					     + 4.0*x[1]*x[1]);
     }
     else
     {
@@ -614,11 +598,6 @@ namespace Parameters
       tau[0] = 0.0;
       tau[1] = T_mag*(0.25-x[1]*x[1]);
     }
-    else if (Parameters::Problem_case==Parameters::Custom1)
-    {
-      tau[0] = 2.0 * P_mag*P_mag * x[0]*x[0] * (12.0*x[0] + 1.0);
-      tau[1] = 4.0/3.0 * P_mag*P_mag * x[1] * (3.0*x[0] + 4.0);
-    }
     else
     {
       throw OomphLibError("Unexpected problem setup",
@@ -628,61 +607,14 @@ namespace Parameters
 
   }
 
-  // Get exact deflection
-  void exact_w(const Vector<double>& x, const unsigned& j, double& w)
-  {
-    switch (j)
-    {
-    case 0:
-      w = 1.0 * P_mag * (pow(x[0],3) + pow(x[1],2));
-    case 1:
-      w = 3.0 * P_mag * (pow(x[0],2) + pow(x[1],2));
-    case 2:
-      w = 2.0 * P_mag * (pow(x[0],3) + pow(x[1],1));
-    case 3:
-      w = 6.0 * P_mag * (pow(x[0],1) + pow(x[1],2));
-    case 4:
-      w = 6.0 * P_mag * (pow(x[0],2) + pow(x[1],1));
-    case 5:
-      w = 2.0 * P_mag * (pow(x[0],3) + pow(x[1],0));
-    }
-  }
-
-  // Test solution exact bending
-  void exact_bending(const Vector<double>& x, DenseDoubleMatrix& M)
-  {
-    M(0,0) = 6.0 * P_mag * x[0];
-    M(0,1) = 0.0;
-    M(1,0) = 0.0;
-    M(1,1) = 2.0 * P_mag;
-  }
-
-  // Test solution exact strain
-  void exact_strain(const Vector<double>& x, DenseDoubleMatrix& E)
-  {
-    E(0,0) = 9.0/2.0 * P_mag*P_mag * pow(x[0],4);
-    E(0,1) = 3.0 * P_mag*P_mag * x[0]*x[0]*x[1];
-    E(1,0) = 3.0 * P_mag*P_mag * x[0]*x[0]*x[1];
-    E(1,1) = 2.0 * P_mag*P_mag * x[1]*x[1];
-  }
-
-  // Test solution exact stress
-  void exact_stress(const Vector<double>& x, DenseDoubleMatrix& S)
-  {
-    S(0,0) = 2.0/3.0 * P_mag*P_mag * (9.0*pow(x[0],4) + 2.0*pow(x[1],2));
-    S(0,1) = 2.0 * P_mag*P_mag * x[0]*x[0]*x[1];
-    S(1,0) = 2.0 * P_mag*P_mag * x[0]*x[0]*x[1];
-    S(1,1) = 1.0/3.0 * P_mag*P_mag * (9.0*pow(x[0],4) + 8.0*pow(x[1],2));
-  }
-
   // Get the null function for applying homogenous BCs
-  void get_null_fct(const Vector<double>& x, double& exact_w)
+  void get_null_fct(const Vector<double>& X, double& exact_w)
   {
     exact_w = 0.0;
   }
 
   // Get the unit function for applying homogenous BCs
-  void get_unit_fct(const Vector<double>& x, double& exact_w)
+  void get_unit_fct(const Vector<double>& X, double& exact_w)
   {
     exact_w = 1.0;
   }
@@ -735,18 +667,18 @@ public:
   /// [zdec] temp
   void actions_before_newton_step()
   {
-  //   // Filenames
-  //   char res_filename[100];
-  //   char jac_filename[100];
-  //   sprintf(res_filename,"res_%i_%i",Doc_info.number(),Nnewton_iter_taken);
-  //   sprintf(jac_filename,"jac_%i_%i",Doc_info.number(),Nnewton_iter_taken);
-  //   // Get the jacobian
-  //   LinearAlgebraDistribution* dist = this->dof_distribution_pt();
-  //   DoubleVector res(dist,0.0);
-  //   CRDoubleMatrix jac(dist);
-  //   get_jacobian(res,jac);
-  //   res.output(res_filename);
-  //   jac.sparse_indexed_output(jac_filename);
+    // Filenames
+    char res_filename[100];
+    char jac_filename[100];
+    sprintf(res_filename,"res_%i_%i",Doc_info.number(),Nnewton_iter_taken);
+    sprintf(jac_filename,"jac_%i_%i",Doc_info.number(),Nnewton_iter_taken);
+    // Get the jacobian
+    LinearAlgebraDistribution* dist = this->dof_distribution_pt();
+    DoubleVector res(dist,0.0);
+    CRDoubleMatrix jac(dist);
+    get_jacobian(res,jac);
+    res.output(res_filename);
+    jac.sparse_indexed_output(jac_filename);
   }
 
   /// Make the problem linear (biharmonic) by pinning all in-plane dofs and
@@ -1008,10 +940,10 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   // Build an assign bulk mesh
   Bulk_mesh_pt=new TriangleMesh<ELEMENT>(mesh_parameters);
 
-  // // Split elements that have two boundary edges
-  // TimeStepper* time_stepper_pt = Bulk_mesh_pt->Time_stepper_pt;
-  // Bulk_mesh_pt->
-  //   template split_elements_with_multiple_boundary_edges<ELEMENT>(time_stepper_pt);
+  // Split elements that have two boundary edges
+  TimeStepper* time_stepper_pt = Bulk_mesh_pt->Time_stepper_pt;
+  Bulk_mesh_pt->
+    template split_elements_with_multiple_boundary_edges<ELEMENT>(time_stepper_pt);
 
   // Create the empty constraint element mesh
   Constraint_mesh_pt = new Mesh();
@@ -1245,7 +1177,7 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   {
     // Set the boundary conditions
     unsigned nbound = 2;
-    for(unsigned b = 0; b < nbound; b++)
+    for(unsigned b=0;b<nbound;b++)
     {
       const unsigned nb_element = Bulk_mesh_pt->nboundary_element(b);
       for(unsigned e=0;e<nb_element;e++)
@@ -1256,13 +1188,6 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
         // A true clamp, so we set everything except the second normal to zero
         for(unsigned idof=0; idof<6; ++idof)
         {
-          // Pin both in plane displacements
-          // Cannot set second normal derivative
-          if(idof<2)
-          {
-            el_pt->fix_in_plane_displacement_dof(idof,b,Parameters::get_null_fct);
-          }
-
           // Cannot set second normal derivative
           if(idof!=3)
           {
@@ -1414,7 +1339,7 @@ upgrade_edge_elements_to_curve(const unsigned &ibound)
     } // end checks
 
     // Upgrade it // hierher what is "3"?
-    bulk_el_pt->upgrade_element_to_curved(edge, s_ubar, s_obar,
+    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,
                                           parametric_curve_pt,
                                           Parameters::Boundary_order);
   }
@@ -1497,7 +1422,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   char filename[100];
 
   // Number of plot points
-  unsigned npts = 50;
+  unsigned npts = 30;
 
   sprintf(filename,"%s/soln%i.dat",Doc_info.directory().c_str(),
           Doc_info.number());
@@ -1522,7 +1447,7 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   Vector<double> u_0(3,0.0);
   u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_fvk_disp(s);
 
-  oomph_info << "w in the middle: " << std::setprecision(15) << u_0[2] << std::endl;
+  oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[2] << std::endl;
 
   Trace_file << Parameters::P_mag << " " << u_0[0] << '\n';
 
@@ -1536,17 +1461,39 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
 //=======start_of_main========================================
 ///Driver code for demo of inline triangle mesh generation
 //============================================================
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
   // Store command line arguments
-  CommandLineArgs::setup(argc, argv);
+  CommandLineArgs::setup(argc,argv);
 
   // Define possible command line arguments and parse the ones that
   // were actually specified
 
+
   // Clamped boundary conditions?
   CommandLineArgs::specify_command_line_flag("--use_clamped_bc");
+
+  // Poisson Ratio
+  CommandLineArgs::specify_command_line_flag("--nu",
+                                             &Parameters::Nu);
+
+  // Applied Pressure
+  CommandLineArgs::specify_command_line_flag("--p",
+                                             &Parameters::P_mag);
+
+  // FvK prameter
+  CommandLineArgs::specify_command_line_flag("--eta",
+                                             &Parameters::Eta);
+
+  // Element Area
+  double element_area=0.09;
+  CommandLineArgs::specify_command_line_flag("--element_area",
+                                             &element_area);
+
+  // Order of the boundary interpolation
+  CommandLineArgs::specify_command_line_flag("--boundary_order",
+                                             &Parameters::Boundary_order);
 
   // Parse command line
   CommandLineArgs::parse_and_assign();
@@ -1558,95 +1505,64 @@ int main(int argc, char** argv)
   // Constant pressure for validation case
   if (CommandLineArgs::command_line_flag_has_been_set("--use_clamped_bc"))
   {
-    Parameters::Problem_case = Parameters::Clamped_validation;
+    Parameters::Problem_case=Parameters::Clamped_validation;
   }
 
   // Build problem
   // UnstructuredFvKProblem<NON_WRAPPED_ELEMENT
-  // UnstructuredFvKProblem<FvKPointForceAndSourceElement<NON_WRAPPED_ELEMENT>>
-  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>> problem(
-    Parameters::Element_area);
+  //UnstructuredFvKProblem<FvKPointForceAndSourceElement<NON_WRAPPED_ELEMENT>>
+  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
+    problem(element_area);
 
 
-  problem.max_residuals() = 1.0e3;
-  problem.max_newton_iterations() = 30;
-  problem.newton_solver_tolerance() = 1.0e-11;
-  problem.target_error_safety_factor() = 0.5;
+  // Control parameters
+  double dp_mag=0.000001;
+  double dt_mag=0.000001;
+  unsigned nstep=1000;
 
-  // Document the initial state
-  problem.doc_solution();
-
-  // Set the Poisson ratio
-  Parameters::Nu = 0.5;
-  // Set pressure
-  Parameters::P_mag = 0.0;
-  //double p_inc = 0.01e-3 * Parameters::Eta;
-  double p_inc = 1.0e-3;
-  unsigned n_step = 10;
-
-  // Do we want to solve the linear problem?
-  // Parameters::Eta = 0.0;
-  // problem.make_linear();
-  // Parameters::Eta = 12.0 * (1.0 - Parameters::Nu * Parameters::Nu) /
-  //   (Parameters::Thickness * Parameters::Thickness);
-
-  for( unsigned i = 0; i < n_step; i++ )
+  // Which case are we doing
+  if (Parameters::Problem_case==Parameters::Clamped_validation)
   {
-    Parameters::P_mag += p_inc;
-    // Solve the system
-    problem.newton_solve();
-    // Document the current solution
-    problem.doc_solution();
+    nstep=1;
+    dp_mag=0.01;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.01;
+    Parameters::T_mag=0.0;
+  }
+  else if (Parameters::Problem_case==Parameters::Axisymmetric_shear_buckling)
+  {
+    nstep=100;
+    dp_mag=0.0;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.001;
+    Parameters::T_mag=0.0;
+  }
+  else if (Parameters::Problem_case==Parameters::Nonaxisymmetric_shear_buckling)
+  {
+    nstep=100;
+    dp_mag=0.0;
+    dt_mag=0.000001;
+    Parameters::P_mag=0.001;
+    Parameters::T_mag=0.0;
   }
 
+  // Loop
+  for (unsigned i = 0; i < nstep; i++)
+  {
+    oomph_info<< "Solving for P = "
+              << Parameters::P_mag
+              << " ; Tau = "
+              << Parameters::T_mag << "\n";
 
-  // double dp_mag = 0.000001;
-  // double dt_mag = 0.000001;
-  // unsigned nstep = 1000;
+    // Do it
+    problem.newton_solve();
 
+    // Document it
+    problem.doc_solution();
 
-  // // Which case are we doing
-  // if (Parameters::Problem_case == Parameters::Clamped_validation)
-  // {
-  //   nstep = 1;
-  //   dp_mag = 0.01;
-  //   dt_mag = 0.00;
-  //   Parameters::P_mag = 1.0;
-  //   Parameters::T_mag = 0.0;
-  // }
-  // else if (Parameters::Problem_case == Parameters::Axisymmetric_shear_buckling)
-  // {
-  //   nstep = 100;
-  //   dp_mag = 0.0;
-  //   dt_mag = 0.000001;
-  //   Parameters::P_mag = 0.001;
-  //   Parameters::T_mag = 0.0;
-  // }
-  // else if (Parameters::Problem_case ==
-  //          Parameters::Nonaxisymmetric_shear_buckling)
-  // {
-  //   nstep = 100;
-  //   dp_mag = 0.0;
-  //   dt_mag = 0.000001;
-  //   Parameters::P_mag = 0.001;
-  //   Parameters::T_mag = 0.0;
-  // }
+    // Bump it
+    Parameters::T_mag+=dt_mag;
+    Parameters::P_mag+=dp_mag;
+  }
 
-  // // Loop
-  // for (unsigned i = 0; i < nstep; i++)
-  // {
-  //   oomph_info << "Solving for P = " << Parameters::P_mag
-  //              << " ; Tau = " << Parameters::T_mag << "\n";
-
-  //   // Do it
-  //   problem.newton_solve();
-
-  //   // Document
-  //   problem.doc_solution();
-
-  //   // Bump
-  //   Parameters::T_mag += dt_mag;
-  //   Parameters::P_mag += dp_mag;
-  // }
-
-} // End of main
+} //End of main

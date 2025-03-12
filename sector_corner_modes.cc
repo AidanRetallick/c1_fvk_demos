@@ -28,8 +28,12 @@
 //LIC//
 //LIC//====================================================================
 
+// Strings
+#include <string.h>
 // Floating point environment
 #include <fenv.h>
+// Directory parsing
+#include <dirent.h>
 
 // Generic oomph-lib routines
 #include "generic.h"
@@ -93,7 +97,10 @@ namespace Parameters
   double Boundary_amp = 0.1;
 
   /// Magnitude of pressure
-  double P_mag = 10.0;
+  double P_mag = 0.0;
+
+  /// Order of interpolation of curved boundaries
+  unsigned Boundary_order = 5;
 
   //                     PARAMETRIC BOUNDARY DEFINITIONS
   // Here we create the geom objects for the Parametric Boundary Definition
@@ -135,47 +142,149 @@ namespace Parameters
     grad[1]=0.0;
   }
 
-  // This metric will flag up any non--axisymmetric parts
-  void axiasymmetry_metric(const Vector<double>& x,
-			   const Vector<double>& u,
-			   const Vector<double>& u_exact,
-			   double& error,
-			   double& norm)
-  {
-    // We use the theta derivative of the out of plane deflection
-    error = pow((-x[1]*u[1] + x[0]*u[2])/sqrt(x[0]*x[0]+x[1]*x[1]),2);
-    norm  = pow(( x[0]*u[1] + x[1]*u[2])/sqrt(x[0]*x[0]+x[1]*x[1]),2);
-  }
 
-  /// Get the exact solution(s)
-  void dummy_exact_w(const Vector<double>& x, Vector<double>& exact_w)
-  {
-    // Do nothing -> no exact solution in this case
-  }
 
   //---------------------------------------------------------------------
-  // Functions to assign boundary conditions
-  // (e.g. sin along arc 0<theta<Alpha)
+  // Eigenmode data and functions
 
-  /// Sin along circular arc for w BC
-  void get_w_along_arc(const Vector<double>& x, double& value)
+  /// Characters to store boundary conditions on straight edges:
+  /// f: free
+  /// p: resting pin
+  /// s: sliding clamp
+  /// c: true clamp
+  /// n: none set yet
+  char Bc_char[3] = "nn";
+
+  /// Eigenvalue
+  complex<double> Lambda = 0.0+0.0i;
+
+  /// Eigenvector
+  Vector<complex<double>> B(4, 0.0+0.0i);
+
+  /// Theta dependent part of the mode
+  complex<double> F(const double& theta)
   {
-    value = Boundary_amp
-      * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
+    return
+      B[0] * sin((Lambda + 1.0) * theta)
+      + B[1] * cos((Lambda + 1.0) * theta)
+      + B[2] * sin((Lambda - 1.0) * theta)
+      + B[3] * cos((Lambda - 1.0) * theta);
   }
 
-  /// Cos along circular arc for dw/dt BC
-  void get_dwdt_along_arc(const Vector<double>& x, double& value)
+  /// First derivative of the theta dependent part of the mode
+  complex<double> dF(const double& theta)
   {
-    value = 2.0*Pi/Alpha * Boundary_amp
-      * cos( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
+    return
+      (Lambda + 1.0) * (B[0] * cos((Lambda + 1.0) * theta)
+			- B[1] * sin((Lambda + 1.0) * theta))
+      + (Lambda - 1.0) * (B[2] * cos((Lambda - 1.0) * theta)
+			  - B[3] * sin((Lambda - 1.0) * theta));
   }
 
-  /// -Sin along circular arc for d2w/dt2 BC
-  void get_d2wdt2_along_arc(const Vector<double>& x, double& value)
+  /// Second derivative of the theta dependent part of the mode
+  complex<double> d2F(const double& theta)
   {
-    value = -pow(2.0*Pi/Alpha,2.0) * Boundary_amp
-      * sin( 2.0*Pi*atan2(x[1],x[0]) / Alpha );
+    return
+      - pow(Lambda + 1.0, 2) * (B[0] * sin((Lambda + 1.0) * theta)
+				+ B[1] * cos((Lambda + 1.0) * theta))
+      - pow(Lambda - 1.0, 2) * (B[2] * sin((Lambda - 1.0) * theta)
+				+ B[3] * cos((Lambda - 1.0) * theta));
+  }
+
+  /// Get the analytic biharmonic eigenmode at x
+  void eigenmode(const Vector<double>& x,
+		 double& w)
+  {
+    // Polar coordinates
+    double r = sqrt(x[0] * x[0] + x[1] * x[1]);
+    double theta = atan2(x[1], x[0]);
+
+    // Angle dependence
+    complex<double> f = F(theta);
+
+    // Set mode at x: w=r^{Lambda+1}*F(theta)
+    w = real( pow(r,Lambda+1.0) * f );
+  }
+
+  /// Get the theta derivative of the analytic biharmonic eigenmode at x
+  void deigenmode_dtheta(const Vector<double>& x,
+			 double& w)
+  {
+    // Polar coordinates
+    double r = sqrt(x[0] * x[0] + x[1] * x[1]);
+    double theta = atan2(x[1], x[0]);
+
+    // Angle dependence
+    complex<double> df = dF(theta);
+    // Set mode at x: w=r^{Lambda+1}*F(theta)
+    w = real( pow(r,Lambda+1.0) * df );
+  }
+
+  /// Get the second theta derivative of the analytic biharmonic eigenmode at x
+  void d2eigenmode_dtheta2(const Vector<double>& x,
+			   double& w)
+  {
+    // Polar coordinates
+    double r = sqrt(x[0] * x[0] + x[1] * x[1]);
+    double theta = atan2(x[1], x[0]);
+
+    // Angle dependence
+    complex<double> d2f = d2F(theta);
+
+    // Set mode at x: w=r^{Lambda+1}*F(theta)
+    w = real( pow(r,Lambda+1.0) * d2f );
+  }
+
+  /// Get the r derivative of the analytic biharmonic eigenmode at x
+  void deigenmode_dr(const Vector<double>& x,
+		     double& w)
+  {
+    // Polar coordinates
+    double r = sqrt(x[0] * x[0] + x[1] * x[1]);
+    double theta = atan2(x[1], x[0]);
+
+    // Angle dependence
+    complex<double> f = F(theta);
+
+    // Set mode at x: w=r^{Lambda+1}*F(theta)
+    w = real( (Lambda + 1.0) * pow(r,Lambda) * f );
+  }
+
+  /// Get the second r derivative of the analytic biharmonic eigenmode at x
+  void d2eigenmode_dr2(const Vector<double>& x,
+		       double& w)
+  {
+    // Polar coordinates
+    double r = sqrt(x[0] * x[0] + x[1] * x[1]);
+    double theta = atan2(x[1], x[0]);
+
+    // Angle dependence
+    complex<double> f = F(theta);
+
+    // Set mode at x: w=r^{Lambda+1}*F(theta)
+    w = real( (Lambda + 1.0) * Lambda * pow(r,Lambda-1.0) * f );
+  }
+
+  /// Get the mixed derivative of the analytic biharmonic eigenmode at x
+  void d2eigenmode_drdtheta(const Vector<double>& x,
+			    double& w)
+  {
+    // Polar coordinates
+    double r = sqrt(x[0] * x[0] + x[1] * x[1]);
+    double theta = atan2(x[1], x[0]);
+
+    // Angle dependence
+    complex<double> df = dF(theta);
+
+    // Set mode at x: w=r^{Lambda+1}*F(theta)
+    w = real( (Lambda + 1.0) * pow(r,Lambda) * df );
+  }
+
+  /// Vector wrapper to the eigenmode function to use as error function
+  void exact_soln(const Vector<double>& x, Vector<double>& w)
+  {
+    // Fill out the displacement for the second
+    eigenmode(x,w[0]);
   }
 
   /// Null function for any zero (homogenous) BCs
@@ -220,9 +329,6 @@ public:
   /// Setup and build the mesh
   void build_mesh();
 
-  /// Duplicate corner nodes and create constraint elements at those corners
-  void duplicate_corner_nodes();
-
   /// Update after solve (empty)
   void actions_after_newton_solve()
   {
@@ -236,8 +342,58 @@ public:
   /// Empty as the boundary conditions stay fixed
   void actions_before_newton_solve()
   {
-    // Reapply boundary conditions
+    //    // Reapply boundary conditions
+    //    apply_boundary_conditions();
+  }
+
+  /// [zdec] temp
+  void actions_before_newton_step()
+  {
+    // Filenames
+    char res_filename[100];
+    char jac_filename[100];
+    sprintf(res_filename,"res_%i_%i",Doc_info.number(),Nnewton_iter_taken);
+    sprintf(jac_filename,"jac_%i_%i",Doc_info.number(),Nnewton_iter_taken);
+    // Get the jacobian
+    LinearAlgebraDistribution* dist = this->dof_distribution_pt();
+    DoubleVector res(dist,0.0);
+    CRDoubleMatrix jac(dist);
+    get_jacobian(res,jac);
+    res.output(res_filename);
+    jac.sparse_indexed_output(jac_filename);
+  }
+
+  /// Update the boundary conditions along with the constraints and eqn
+  /// numbering
+  void update_boundary_conditions()
+  {
+    // Reset by unpinning all the nodal dofs in the mesh
+    unsigned n_node = Bulk_mesh_pt->nnode();
+    for(unsigned i_node = 0; i_node < n_node; i_node++)
+    {
+      Bulk_mesh_pt->node_pt(i_node)->unpin_all();
+    }
+
+    // Apply the new boundary conditions
     apply_boundary_conditions();
+
+    // Pin in-plane displacements throughout the bulk
+    if(Solve_linear_bending)
+    {
+      pin_all_in_plane_displacements();
+    }
+
+    // Update the corner constraintes based on boundary conditions
+    unsigned n_el = Constraint_mesh_pt->nelement();
+    for(unsigned i_el = 0; i_el < n_el; i_el++)
+    {
+      dynamic_cast<DuplicateNodeConstraintElement*>
+	(Constraint_mesh_pt->element_pt(i_el))
+	->validate_and_pin_redundant_constraints();
+    }
+
+    // Update the equation numbering
+    assign_eqn_numbers();
   }
 
   /// Doc the solution
@@ -248,7 +404,7 @@ public:
   /// the actual mesh type.
   TriangleMesh<ELEMENT>* mesh_pt()
   {
-    return dynamic_cast<TriangleMesh<ELEMENT>*> (Problem::mesh_pt());
+   return dynamic_cast<TriangleMesh<ELEMENT>*> (Problem::mesh_pt());
   }
 
   /// Doc info object for labeling output
@@ -278,6 +434,9 @@ private:
     // Apply any boundary conditions
     apply_boundary_conditions();
   }
+
+  /// Duplicate corner nodes and create constraint elements at those corners
+  void duplicate_corner_nodes();
 
   /// Helper function to apply boundary conditions
   void apply_boundary_conditions();
@@ -357,8 +516,8 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem(double element_area)
   oomph_info << "Number of equations: "
 	     << assign_eqn_numbers() << '\n';
 
-  // Doc the equatiuons
-  describe_dofs();
+  // // Doc the equatiuons
+  // describe_dofs();
 
 } // end Constructor
 
@@ -406,7 +565,7 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   // Curved arc boundary
   double zeta_start = 0.0;
   double zeta_end = alpha;
-  unsigned nsegment = 1.0; //(int)(Pi/sqrt(Element_area));
+  unsigned nsegment = (int)(Parameters::Alpha/sqrt(Element_area));
   Outer_boundary_curvilines_pt[Circular_arc_bnum] =
     new TriangleMeshCurviLine(Outer_boundary_ellipse_pt, zeta_start,
 			      zeta_end, nsegment, Circular_arc_bnum);
@@ -580,11 +739,10 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
     //Set the pressure function pointers and the physical constants
     el_pt->pressure_fct_pt() = &Parameters::get_pressure;
     el_pt->in_plane_forcing_fct_pt() = &Parameters::get_in_plane_force;
-    // There is no error metric in this case
-    el_pt->error_metric_fct_pt() = &Parameters::axiasymmetry_metric;
     el_pt->nu_pt() = &Parameters::Nu;
     if(Solve_linear_bending)
     {
+      cout << "Solving linear bending problem" << endl;
       el_pt->eta_pt() = &Parameters::Eta_linear;
     }
     else
@@ -626,14 +784,6 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // The free boundary condition is completely unpinned
   static const Vector<unsigned> free{};
 
-  // In-plane dofs:
-  // |  0  |  1  |
-  // |  un |  ut |
-  // Possible boundary conditions on the in-plane displacement
-  static const Vector<unsigned> pin_un_dofs{0};
-  static const Vector<unsigned> pin_ut_dofs{1};
-  static const Vector<unsigned> pin_inplane_dofs{0,1};
-
   // Out-of-plane dofs:
   // |  0  |  1  |  2  |  3  |  4  |  5  |
   // |  w  | w_n | w_t | w_nn| w_nt| w_tt|
@@ -643,23 +793,41 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   static const Vector<unsigned> true_clamp_dofs{0,1,2,4,5};
 
   //----------------------------------------------------------------------------
-  // Assign boundary conditions to each edge (do circular arc manually)
-  Vector<unsigned> straight_edge_0_pinned_u_dofs = pin_inplane_dofs;
-  Vector<unsigned> straight_edge_1_pinned_u_dofs = pin_inplane_dofs;
-  Vector<unsigned> circular_arc_pinned_u_dofs = pin_inplane_dofs;
-  Vector<unsigned> straight_edge_0_pinned_w_dofs = resting_pin_dofs;
-  Vector<unsigned> straight_edge_1_pinned_w_dofs = free;//resting_pin_dofs;
-  // Vector<unsigned> circular_arc_pinned_w_dofs = true_clamp_dofs;
+  // Storage for boundary conditions to each straight edge
+  Vector<Vector<unsigned>> straight_edge_pinned_w_dofs(2, Vector<unsigned>{});
+  for(unsigned i_straight_b = 0; i_straight_b < 2; i_straight_b++)
+  {
+    switch(Parameters::Bc_char[i_straight_b])
+    {
+    case 'f':
+      cout << "Edge " << i_straight_b << " is "
+	   << Parameters::Bc_char[i_straight_b] << std::endl;
+      straight_edge_pinned_w_dofs[i_straight_b] = free;
+      break;
+    case 'p':
+      cout << "Edge " << i_straight_b << " is "
+	   << Parameters::Bc_char[i_straight_b] << std::endl;
+      straight_edge_pinned_w_dofs[i_straight_b] = resting_pin_dofs;
+      break;
+    case 's':
+      cout << "Edge " << i_straight_b << " is "
+	   << Parameters::Bc_char[i_straight_b] << std::endl;
+      straight_edge_pinned_w_dofs[i_straight_b] = sliding_clamp_dofs;
+      break;
+    case 'c':
+      cout << "Edge " << i_straight_b << " is "
+	   << Parameters::Bc_char[i_straight_b] << std::endl;
+      straight_edge_pinned_w_dofs[i_straight_b] = true_clamp_dofs;
+      break;
+    }
+  }
 
   // Allocate storage for the number of elements and dofs
   unsigned n_b_element = 0;
-  unsigned n_pinned_u_dofs = 0;
   unsigned n_pinned_w_dofs = 0;
 
   // Loop over the circular arc elements
   n_b_element = Bulk_mesh_pt->nboundary_element(Circular_arc_bnum);
-  n_pinned_u_dofs = circular_arc_pinned_u_dofs.size();
-  // n_pinned_w_dofs = circular_arc_pinned_w_dofs.size();
   for(unsigned e=0;e<n_b_element;e++)
   {
     // Get pointer to bulk element adjacent to curved arc
@@ -667,14 +835,14 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
       dynamic_cast<ELEMENT*>(Bulk_mesh_pt
 			     ->boundary_element_pt(Circular_arc_bnum,e));
 
-    // Pin in-plane dofs
-    for(unsigned i=0; i<n_pinned_u_dofs; i++)
-    {
-      unsigned idof=circular_arc_pinned_u_dofs[i];
-      el_pt->fix_in_plane_displacement_dof(idof,
-					   Circular_arc_bnum,
-					   Parameters::get_null_fct);
-    }
+    // // Pin in-plane dofs
+    // for(unsigned i=0; i<n_pinned_u_dofs; i++)
+    // {
+    //   unsigned idof=circular_arc_pinned_u_dofs[i];
+    //   el_pt->fix_in_plane_displacement_dof(idof,
+    // 					   Circular_arc_bnum,
+    // 					   Parameters::get_null_fct);
+    // }
     // Pin out-of-plane dofs (resting pin -- only set tangent derivatives)
     for(unsigned idof=0; idof<6; ++idof)
     {
@@ -682,25 +850,34 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
       {
 	// [hierher] Make function of arclength rather than global x
       case 0:
-	// w
 	el_pt->fix_out_of_plane_displacement_dof(idof,
 						 Circular_arc_bnum,
-						 Parameters::get_w_along_arc);
-						 // Parameters::get_null_fct);
+						 Parameters::eigenmode);
+	break;
+      case 1:
+	el_pt->fix_out_of_plane_displacement_dof(idof,
+						 Circular_arc_bnum,
+						 Parameters::deigenmode_dr);
 	break;
       case 2:
-	// dwdt
 	el_pt->fix_out_of_plane_displacement_dof(idof,
 						 Circular_arc_bnum,
-						 Parameters::get_dwdt_along_arc);
-						 // Parameters::get_null_fct);
+						 Parameters::deigenmode_dtheta);
+	break;
+      // case 3: // NEVER?
+      // 	el_pt->fix_out_of_plane_displacement_dof(idof,
+      //  						 Circular_arc_bnum,
+      //  						 Parameters::d2eigenmode_dr2);
+      //  	break;
+      case 4:
+	el_pt->fix_out_of_plane_displacement_dof(idof,
+						 Circular_arc_bnum,
+						 Parameters::d2eigenmode_drdtheta);
 	break;
       case 5:
-	// d2wdt2
 	el_pt->fix_out_of_plane_displacement_dof(idof,
 						 Circular_arc_bnum,
-						 Parameters::get_d2wdt2_along_arc);
-						 // Parameters::get_null_fct);
+						 Parameters::d2eigenmode_dtheta2);
 	break;
       default:
 	// Leave free
@@ -709,65 +886,39 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
     } // End loop over dofs [idof]
   } // End loop over boundary elements [e]
 
-  // Loop over straight side 0 elements and apply homogenous BCs
-  n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_0_bnum);
-  n_pinned_u_dofs = straight_edge_0_pinned_u_dofs.size();
-  n_pinned_w_dofs = straight_edge_0_pinned_w_dofs.size();
-  for(unsigned e=0;e<n_b_element;e++)
+  // Loop over the straight boundaries
+  for(unsigned i_bound = 0; i_bound < 2; i_bound++)
   {
-    // Get pointer to bulk element adjacent to b
-    ELEMENT* el_pt =
-      dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(Straight_edge_0_bnum,e));
-
-    // Pin in-plane dofs
-    for(unsigned i=0; i<n_pinned_u_dofs; i++)
+    // The boundary index of the ith boundary
+    unsigned bound;
+    switch(i_bound)
     {
-      unsigned idof = straight_edge_0_pinned_u_dofs[i];
-      el_pt->fix_in_plane_displacement_dof(idof,
-					   Straight_edge_0_bnum,
-					   Parameters::get_null_fct);
-    } // End loop over in-plane dofs [i]
+    case 0:
+      bound = Straight_edge_0_bnum;
+      break;
+    case 1:
+      bound = Straight_edge_1_bnum;
+      break;
+    }
+    // Loop over straight side elements and apply homogenous BCs
+    n_b_element = Bulk_mesh_pt->nboundary_element(bound);
+    n_pinned_w_dofs = straight_edge_pinned_w_dofs[i_bound].size();
+    for(unsigned e=0;e<n_b_element;e++)
+    {
+      // Get pointer to bulk element adjacent to b
+      ELEMENT* el_pt =
+	dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(bound,e));
+
       // Pin out-of-plane dofs
-    for(unsigned i=0; i<n_pinned_w_dofs; i++)
-    {
-      unsigned idof = straight_edge_0_pinned_w_dofs[i];
-      el_pt->fix_out_of_plane_displacement_dof(idof,
-					       Straight_edge_0_bnum,
-					       Parameters::get_null_fct);
-    } // End loop over out-of-plane dofs [i]
-  } // End loop over boundary elements [e]
-
-  // Loop over straight side 1 elements and apply homogenous BCs
-  n_b_element = Bulk_mesh_pt->nboundary_element(Straight_edge_1_bnum);
-  n_pinned_u_dofs = straight_edge_1_pinned_u_dofs.size();
-  n_pinned_w_dofs = straight_edge_1_pinned_w_dofs.size();
-  for(unsigned e=0;e<n_b_element;e++)
-  {
-    // Get pointer to bulk element adjacent to b
-    ELEMENT* el_pt =
-      dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(Straight_edge_1_bnum,e));
-
-    // Pin in-plane dofs
-    for(unsigned i=0; i<n_pinned_u_dofs; i++)
-    {
-      unsigned idof = straight_edge_1_pinned_u_dofs[i];
-      el_pt->fix_in_plane_displacement_dof(idof,
-					   Straight_edge_1_bnum,
-					   Parameters::get_null_fct);
-    } // End loop over in-plane dofs [i]
-      // Pin out-of-plane dofs
-    for(unsigned i=0; i<n_pinned_w_dofs; i++)
-    {
-      unsigned idof = straight_edge_1_pinned_w_dofs[i];
-      el_pt->fix_out_of_plane_displacement_dof(idof,
-					       Straight_edge_1_bnum,
-					       Parameters::get_null_fct);
-    } // End loop over out-of-plane dofs [i]
-  } // End loop over boundary elements [e]
-
-
-
-
+      for(unsigned j_dof = 0; j_dof < n_pinned_w_dofs; j_dof++)
+      {
+	unsigned dof = straight_edge_pinned_w_dofs[i_bound][j_dof];
+	el_pt->fix_out_of_plane_displacement_dof(dof,
+						 bound,
+						 Parameters::get_null_fct);
+      } // End loop over out-of-plane dofs [j_dof]
+    } // End loop over boundary elements [e]
+  } // End loop over boundaries [i_bound]
 } // end set bc
 
 
@@ -871,7 +1022,11 @@ as the edge is traversed anti-clockwise.",
     } // end checks
 
       // Upgrade it
-    bulk_el_pt->upgrade_element_to_curved(edge,s_ubar,s_obar,parametric_curve_pt,5);
+    bulk_el_pt->upgrade_element_to_curved(edge,
+            s_ubar,
+            s_obar,
+            parametric_curve_pt,
+            Parameters::Boundary_order);
   }
 }// end_upgrade_elements
 
@@ -974,9 +1129,17 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   char filename[100];
 
   // Number of plot points
-  unsigned npts = 5;
+  unsigned npts = 10;
 
-  sprintf(filename,"RESLT/soln%i-%f.dat",Doc_info.number(),Element_area);
+  sprintf(filename,"RESLT/soln%i.dat",Doc_info.number());
+  some_file.open(filename);
+  Bulk_mesh_pt->output(some_file,npts);
+  some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
+	    << comment << "\"\n";
+  some_file.close();
+
+  npts=2;
+  sprintf(filename,"RESLT/soln_coarse%i.dat",Doc_info.number());
   some_file.open(filename);
   Bulk_mesh_pt->output(some_file,npts);
   some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
@@ -986,16 +1149,18 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   // Doc error and return of the square of the L2 error
   //---------------------------------------------------
   //double error,norm,dummy_error,zero_norm;
-  double dummy_error,zero_norm;
-  sprintf(filename,"RESLT/error%i-%f.dat",Doc_info.number(),Element_area);
+  double error, zero_norm;
+  sprintf(filename,"RESLT/error%i.csv",Doc_info.number());
   some_file.open(filename);
 
-  Bulk_mesh_pt->compute_error(some_file,Parameters::dummy_exact_w,
-			      dummy_error,zero_norm);
+  Bulk_mesh_pt->compute_error(some_file,
+			      Parameters::exact_soln,
+			      error,
+			      zero_norm);
   some_file.close();
 
   // Doc L2 error and norm of solution
-  oomph_info << "Absolute norm of computed solution: " << sqrt(dummy_error)
+  oomph_info << "Absolute norm of computed solution: " << sqrt(error)
 	     << std::endl;
 
   oomph_info << "Norm of computed solution: " << sqrt(zero_norm)
@@ -1003,38 +1168,34 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
 
   // Find the solution at r=0
   //   // ----------------------
-  MeshAsGeomObject* Mesh_as_geom_obj_pt=
-    new MeshAsGeomObject(Bulk_mesh_pt);
+  MeshAsGeomObject mesh_as_geom_obj(Bulk_mesh_pt);
   Vector<double> s(2);
   GeomObject* geom_obj_pt=0;
   Vector<double> r(2,0.0);
-  Mesh_as_geom_obj_pt->locate_zeta(r,geom_obj_pt,s);
+  mesh_as_geom_obj.locate_zeta(r,geom_obj_pt,s);
   // Compute the interpolated displacement vector
-  Vector<double> u_0(12,0.0);
-  u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_u_foeppl_von_karman(s);
+  Vector<double> u_0(3,0.0);
+  u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_fvk_disp(s);
 
-  oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[0] << std::endl;
+  oomph_info << "w in the middle: " << std::setprecision(15) << u_0[2] << std::endl;
 
   Trace_file << u_0[0] << '\n';
 
   // Doc error and return of the square of the L2 error
   //---------------------------------------------------
-  sprintf(filename,"RESLT/L2-norm%i-%f.dat",
-	  Doc_info.number(),
-	  Element_area);
+  sprintf(filename,"RESLT/L2-norm%i.dat",
+	  Doc_info.number());
   some_file.open(filename);
 
   some_file<<"### L2 Norm\n";
   some_file<<"##  Format: err^2 norm^2 \n";
   // Print error in prescribed format
-  some_file<< dummy_error <<" "<< zero_norm <<"\n";
+  some_file<< error <<" "<< zero_norm <<"\n";
   some_file.close();
 
   // Increment the doc_info number
   Doc_info.number()++;
 
-  // Clean up
-  delete Mesh_as_geom_obj_pt;
 } // end of doc
 
 
@@ -1063,9 +1224,13 @@ int main(int argc, char **argv)
   // Applied Pressure
   CommandLineArgs::specify_command_line_flag("--eta", &Parameters::Eta);
 
-  // Element Area (no larger element than 0.09)
-  double element_area=1.0;
+  // Element Area (no larger element than)
+  double element_area=0.1;
   CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
+
+  // Selecet the boundary order
+  CommandLineArgs::specify_command_line_flag("--boundary_order",
+                                             &Parameters::Boundary_order);
 
   // Parse command line
   CommandLineArgs::parse_and_assign();
@@ -1077,22 +1242,61 @@ int main(int argc, char **argv)
 
   // Set up some problem paramters
   problem.max_residuals()=1e3;
-  problem.max_newton_iterations()=20;
+  problem.max_newton_iterations()=30;
+  // [zdec] temp
+  problem.newton_solver_tolerance()=1.0e-8;
 
   // Pre mess doc
   problem.doc_solution();
 
-  // Do the newton solve
-  problem.steady_newton_solve();
+  // The name of the directory we expect to find our modes
+  char dirname[100];
+  sprintf(dirname, "Modes_sector");
+  DIR* dir = opendir(dirname);
 
-  // Document
-  problem.doc_solution();
-  oomph_info << std::endl;
-  oomph_info << "---------------------------------------------" << std::endl;
-  oomph_info << "Solution number (" <<problem.Doc_info.number()-1 << ")"
-	     << std::endl;
-  oomph_info << "---------------------------------------------" << std::endl;
-  oomph_info << std::endl;
+  // Loop over the eigenmodes in the Modes directory and validate that we are
+  // close to them.
+  for(dirent* dent; (dent = readdir(dir)) != NULL; )
+  {
+    // Get this entries name and take the first and third letters to be the bcs
+    // on the first and second straight edges respectively
+    std::string filename = dent->d_name;
+    // Skip the directory links
+    if(filename=="." || filename=="..")
+    {
+      continue;
+    }
+    Parameters::Bc_char[0]=filename[0];
+    Parameters::Bc_char[1]=filename[2];
+    oomph_info << Parameters::Bc_char << std::endl;
+
+    // Open the file and copy the first four lines into the eigenvector
+    std::ifstream fin((string)(dirname)+'/'+filename);
+    std::string line;
+    for(unsigned i=0; i<4; i++)
+    {
+      // Get a line (complex number)
+      std::getline(fin, line);
+      // Copy the line to the complex evec entry via a stringstream
+      stringstream linestream('('+line+')');
+      oomph_info << linestream.str() << std::endl;//Parameters::Lambda;
+      linestream >> Parameters::B[i];
+    }
+    // The last line is the eigenvalue
+    std::getline(fin, line);
+    // Copy the line to the complex eval entry via a stringstream
+    stringstream linestream('('+line+')');
+    oomph_info << linestream.str() << std::endl;
+    linestream >> Parameters::Lambda;
+
+    // Apply the appropriate boundary conditions for this test
+    problem.update_boundary_conditions();
+    problem.describe_dofs();
+    // Now solve and doc the solution with these bcs
+    problem.steady_newton_solve();
+    problem.doc_solution();
+  }
+
   // Print success
   oomph_info<<"Exiting Normally\n";
 } //End of main

@@ -51,20 +51,20 @@ namespace Parameters
   /// Square edge length
   double L = 1.0;
 
-  /// Angle of rotation (radians obviously)
-  double Alpha = Pi / 5.0;
+  /// Vertex angle sweep 2pi/6 (radians obviously)
+  double Alpha = Pi / 3.0;
+
+  unsigned N_bound = 6;
 
   /// Plate vertices. For the unrotated square, these coincide with:
   ///     L/2*{(-1,-1), (1,-1), (1,1), (-1,1)}
   Vector<Vector<double>> Vertices = {
-    {-L / 2.0 * cos(Alpha) + L / 2.0 * sin(Alpha),
-     -L / 2.0 * sin(Alpha) - L / 2.0 * cos(Alpha)},
-    {L / 2.0 * cos(Alpha) + L / 2.0 * sin(Alpha),
-     L / 2.0 * sin(Alpha) - L / 2.0 * cos(Alpha)},
-    {L / 2.0 * cos(Alpha) - L / 2.0 * sin(Alpha),
-     L / 2.0 * sin(Alpha) + L / 2.0 * cos(Alpha)},
-    {-L / 2.0 * cos(Alpha) - L / 2.0 * sin(Alpha),
-     -L / 2.0 * sin(Alpha) + L / 2.0 * cos(Alpha)}
+    {L * cos(0.0*Alpha), L * sin(0.0*Alpha)},
+    {L * cos(1.0*Alpha), L * sin(1.0*Alpha)},
+    {L * cos(2.0*Alpha), L * sin(2.0*Alpha)},
+    {L * cos(3.0*Alpha), L * sin(3.0*Alpha)},
+    {L * cos(4.0*Alpha), L * sin(4.0*Alpha)},
+    {L * cos(5.0*Alpha), L * sin(5.0*Alpha)},
   };
 
   /// The plate thickness
@@ -76,7 +76,7 @@ namespace Parameters
   /// FvK parameter (slightly dangerous; should really
   /// be computed as a dependent parameter to accommodate
   /// changes in Nu and Thickness.
-  double Eta = 12.0 * (1.0 - Nu * Nu) * Thickness * Thickness;
+  double Eta = 12.0 * (1.0 - Nu * Nu) / (Thickness * Thickness);
 
   /// Magnitude of pressure
   double P_mag = 0.0;
@@ -85,7 +85,7 @@ namespace Parameters
   double T_mag = 0.0;
 
   /// Element size
-  double Element_area = 0.25;
+  double Element_area = 0.5;
 
   /// Function call to update dependent parameters (Eta)
   void update_dependent_parameters()
@@ -119,7 +119,13 @@ namespace Parameters
   CurvilineLine Edge_2(Vertices[2], Vertices[3]);
 
   /// Straight edge 3
-  CurvilineLine Edge_3(Vertices[3], Vertices[0]);
+  CurvilineLine Edge_3(Vertices[3], Vertices[4]);
+
+  /// Straight edge 4
+  CurvilineLine Edge_4(Vertices[4], Vertices[5]);
+
+  /// Straight edge 5
+  CurvilineLine Edge_5(Vertices[5], Vertices[0]);
 
   /// Vector container of addresses for iterating over the edges
   Vector<CurvilineGeomObject*> Curviline_edge_pt =
@@ -127,7 +133,9 @@ namespace Parameters
     &Edge_0,
     &Edge_1,
     &Edge_2,
-    &Edge_3
+    &Edge_3,
+    &Edge_4,
+    &Edge_5
   };
 
 
@@ -172,6 +180,8 @@ public:
     delete Boundary1_pt;
     delete Boundary2_pt;
     delete Boundary3_pt;
+    delete Boundary4_pt;
+    delete Boundary5_pt;
   };
 
 
@@ -196,21 +206,6 @@ public:
   //   fd_jacobian.sparse_indexed_output("fd_jacobian" + suffix);
   // }
 
-  /// Print information about the parameters we are trying to solve for.
-  void actions_before_newton_solve()
-  {
-    // Always update the dependent parameters before a newton solve
-    Parameters::update_dependent_parameters();
-
-    oomph_info << "-------------------------------------------------------"
-               << std::endl;
-    oomph_info << "Solving for P = " << Parameters::P_mag << std::endl;
-    oomph_info << "Solving for T = " << Parameters::T_mag << std::endl;
-    oomph_info << "         step = " << Doc_info.number() << std::endl;
-    oomph_info << "-------------------------------------------------------"
-               << std::endl;
-  }
-
   /// Doc the solution
   void doc_solution(const std::string& comment = "");
 
@@ -229,7 +224,6 @@ public:
   /// Overloaded version of the problem's access function to
   /// the mesh. Recasts the pointer to the base Mesh object to
   /// the actual mesh type.
-  // hierher
   TriangleMesh<ELEMENT>* mesh_pt()
   {
     return Bulk_mesh_pt;
@@ -272,22 +266,17 @@ private:
   /// Polyline defining boundary 3
   TriangleMeshPolyLine* Boundary3_pt;
 
+  /// Polyline defining boundary 4
+  TriangleMeshPolyLine* Boundary4_pt;
+
+  /// Polyline defining boundary 5
+  TriangleMeshPolyLine* Boundary5_pt;
+
   /// Doc info object for labeling output
   DocInfo Doc_info;
 
   /// Trace file to document norm of solution
   ofstream Trace_file;
-
-  /// Keep track of boundary ids, (b)ottom, (r)ight, (t)op, (l)eft
-  // (slightly redundant in this example)
-  // ((after rotation this naming convention is unhelpful))
-  enum
-  {
-    Boundary_b_bnum = 0,
-    Boundary_r_bnum = 1,
-    Boundary_t_bnum = 2,
-    Boundary_l_bnum = 3
-  };
 
   /// Pointer to "bulk" mesh
   TriangleMesh<ELEMENT>* Bulk_mesh_pt;
@@ -330,7 +319,6 @@ UnstructuredFvKProblem<ELEMENT>::UnstructuredFvKProblem()
   // Output parameters
   oomph_info << "Problem parameters:\n"
              << "L            " << Parameters::L << std::endl
-             << "Alpha        " << Parameters::Alpha << std::endl
              << "thickness    " << Parameters::Thickness << std::endl
              << "nu           " << Parameters::Nu << std::endl
              << "eta          " << Parameters::Eta << std::endl
@@ -360,12 +348,16 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   Vector<double> vertex1 = Parameters::Vertices[1];
   Vector<double> vertex2 = Parameters::Vertices[2];
   Vector<double> vertex3 = Parameters::Vertices[3];
+  Vector<double> vertex4 = Parameters::Vertices[4];
+  Vector<double> vertex5 = Parameters::Vertices[5];
 
   // Declare the edges...
   Vector<Vector<double>> edge0(2, Vector<double>(2, 0.0));
   Vector<Vector<double>> edge1(2, Vector<double>(2, 0.0));
   Vector<Vector<double>> edge2(2, Vector<double>(2, 0.0));
   Vector<Vector<double>> edge3(2, Vector<double>(2, 0.0));
+  Vector<Vector<double>> edge4(2, Vector<double>(2, 0.0));
+  Vector<Vector<double>> edge5(2, Vector<double>(2, 0.0));
 
   // ...and assign their endpoints
   edge0[0] = vertex0;
@@ -375,20 +367,28 @@ void UnstructuredFvKProblem<ELEMENT>::build_mesh()
   edge2[0] = vertex2;
   edge2[1] = vertex3;
   edge3[0] = vertex3;
-  edge3[1] = vertex0;
+  edge3[1] = vertex4;
+  edge4[0] = vertex4;
+  edge4[1] = vertex5;
+  edge5[0] = vertex5;
+  edge5[1] = vertex0;
 
   // Define boundaries from edges
   Boundary0_pt = new TriangleMeshPolyLine(edge0, 0);
   Boundary1_pt = new TriangleMeshPolyLine(edge1, 1);
   Boundary2_pt = new TriangleMeshPolyLine(edge2, 2);
   Boundary3_pt = new TriangleMeshPolyLine(edge3, 3);
+  Boundary4_pt = new TriangleMeshPolyLine(edge4, 4);
+  Boundary5_pt = new TriangleMeshPolyLine(edge5, 5);
 
   // Create closed outer boundary
-  Vector<TriangleMeshCurveSection*> boundary_polyline_pt(4);
+  Vector<TriangleMeshCurveSection*> boundary_polyline_pt(6);
   boundary_polyline_pt[0] = Boundary0_pt;
   boundary_polyline_pt[1] = Boundary1_pt;
   boundary_polyline_pt[2] = Boundary2_pt;
   boundary_polyline_pt[3] = Boundary3_pt;
+  boundary_polyline_pt[4] = Boundary4_pt;
+  boundary_polyline_pt[5] = Boundary5_pt;
   Boundary_pt = new TriangleMeshClosedCurve(boundary_polyline_pt);
 
   // Define mesh parameters
@@ -463,7 +463,7 @@ template <class ELEMENT>
 void UnstructuredFvKProblem<ELEMENT >::duplicate_corner_nodes()
 {
   // Loop over the sections of the external boundary
-  unsigned n_bound = 4;
+  unsigned n_bound = Parameters::N_bound;
   for(unsigned i_bound = 0; i_bound < n_bound; i_bound++)
   {
     // Store the index of the next boundary
@@ -577,7 +577,7 @@ void UnstructuredFvKProblem<ELEMENT>::rotate_edge_degrees_of_freedom(
   Mesh* const& bulk_mesh_pt)
 {
   // Get the number of boundaries
-  unsigned n_bound = 4;
+  unsigned n_bound = Parameters::N_bound;
 
   // Loop over the bulk elements
   unsigned n_element = Bulk_mesh_pt->nelement();
@@ -678,24 +678,8 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //
   //      fix_out_of_plane_displacement_dof(idof, b, fct_pt);
   //
-  // assigns boundary conditions for the out-of-plane displacements via
-  // the specification of
-  //
-  // idof   : the enumeration of the dof in the scheme listed above,
-  //          so idof can take values 0, 1. 2, 3, 4 or 5
-  // b      : the mesh boundary along which the boundary condition is
-  //          to be applied
-  // fct_pt : a function pointer to a global function with arguments
-  //          (const Vector<double> x, double& value) which computes
-  //          the value for the relevant out-of-plane displacement (or 
-  //          its derivative; depending on what the dof represents) as a
-  //          function of the coordinate, x, a 2D vector. 
-  //
-  // So, if the function fix_out_of_plane_displacement_dof(idof, b, fct_pt) is called 
-  // with idof=2 and b=3, say, the tangential-derivative of the out-of-plane displacement 
-  // is pinned for all the element's nodes (if any) that are located on mesh boundary 3. 
-  // The value of this derivative is set to whatever the function pointed to by fct_pt 
-  // computes when evaluated at the nodal coordinate. 
+  // hierher complete once Aidan has signed off the explanation above.
+  // [zdec] "This is all good." -- Aidan
   //
   // Using the conventions introduced above, the following vectors identify
   // the in-plane and out-of-plane degrees of freedom to be pinned for
@@ -754,28 +738,24 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   //------------------------------------------------------------------
   //------------------------------------------------------------------
 
+  // Number of boundaries
+  unsigned n_bound = Parameters::N_bound;
 
   // Vectors to store which boundary conditions we are applying to each edge.
-  Vector<Vector<unsigned>> pinned_u_dofs(4);
-  Vector<Vector<unsigned>> pinned_w_dofs(4);
+  Vector<Vector<unsigned>> pinned_u_dofs(n_bound);
+  Vector<Vector<unsigned>> pinned_w_dofs(n_bound);
 
-  // Pin both in-plane displacements everywhere
-  pinned_u_dofs[0] = pin_ux_and_uy_pinned_dof; // hierher. Maybe we should rotate these too?
-  pinned_u_dofs[1] = pin_ux_and_uy_pinned_dof;
-  pinned_u_dofs[2] = pin_ux_and_uy_pinned_dof;
-  pinned_u_dofs[3] = pin_ux_and_uy_pinned_dof;
-
-  // Use pinned edge boundary conditions for the out-of-plane
-  // displacements. Boundaries 0 and 2 are are constant y,
-  // boundaries 1 and 3 are constant x:
-  pinned_w_dofs[0] = fully_clamped_pinned_dof;
-  pinned_w_dofs[1] = fully_clamped_pinned_dof;
-  pinned_w_dofs[2] = fully_clamped_pinned_dof;
-  pinned_w_dofs[3] = fully_clamped_pinned_dof;
+  // Same boundary conditions for all boundaries
+  for (unsigned i_bound = 0; i_bound < n_bound; i_bound++)
+  {
+    // Pin both in-plane displacements everywhere
+    pinned_u_dofs[i_bound] = pin_ux_and_uy_pinned_dof;
+    // Clamp w
+    pinned_w_dofs[i_bound] = fully_clamped_pinned_dof;
+  }
 
 
   // Loop over all the boundaries in our bulk mesh
-  unsigned n_bound = Bulk_mesh_pt->nboundary();
   for (unsigned b = 0; b < n_bound; b++)
   {
     // Number of elements on b
@@ -788,22 +768,17 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
     // Loop over the elements on boundary b
     for (unsigned e = 0; e < nb_element; e++)
     {
-      // Get pointer to bulk element adjacent to b
       ELEMENT* el_pt =
         dynamic_cast<ELEMENT*>(Bulk_mesh_pt->boundary_element_pt(b, e));
 
-      // Pin in-plane dofs (enumerated as explained above) for
-      // all nodes on boundary b. Here we're applying homogeneous
-      // BCs so all pinned values are simply set to zero.
+      // Pin in-plane dofs (enumerated as explained above)
       for (unsigned i = 0; i < n_pinned_u_dofs; i++)
       {
         unsigned idof_to_be_pinned = pinned_u_dofs[b][i];
         el_pt->fix_in_plane_displacement_dof(
           idof_to_be_pinned, b, Parameters::get_null_fct);
       }
-      // Pin out-of-plane dofs (enumerated as explained above) for all
-      // nodes on boundary b. Here we're applying homogeneous BCs so
-      // all pinned values are simply set to zero.
+      // Pin out-of-plane dofs (enumerated as explained above)
       for (unsigned i = 0; i < n_pinned_w_dofs; i++)
       {
         unsigned idof_to_be_pinned = pinned_w_dofs[b][i];
@@ -881,20 +856,28 @@ int main(int argc, char** argv)
   // elements (with 4 nodes per element edge and 10 nodes overall).
   UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>> problem;
 
-  // Set pressure
-  Parameters::P_mag = 10.0;
-  // Set Poisson ratio
-  Parameters::Nu = 0.5;
+  problem.max_residuals() = 1.0e3;
+  problem.max_newton_iterations() = 30;
+  problem.newton_solver_tolerance() = 1.0e-11;
+
   // Solve the system
   problem.newton_solve();
   // Document the current solution
   problem.doc_solution();
 
-  // Set Poisson ratio
-  Parameters::Nu = 0.0;
-  // Solve the system
-  problem.newton_solve();
-  // Document the current solution
-  problem.doc_solution();
+  // Set pressure
+  Parameters::P_mag = 0.0;
+  double p_inc = 0.01e-3 * Parameters::Eta;
+  // Set the Poisson ratio
+  Parameters::Nu = 0.5;
+
+  for( unsigned i = 0; i < 100; i++ )
+  {
+    Parameters::P_mag += p_inc;
+    // Solve the system
+    problem.newton_solve();
+    // Document the current solution
+    problem.doc_solution();
+  }
 
 } // End of main

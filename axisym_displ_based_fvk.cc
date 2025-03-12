@@ -235,7 +235,7 @@ int main(int argc, char **argv)
  unsigned n_step=1;
 
  // Pressure increment
- double dp=0.01;
+ double dp=1.0;
  
  // Set up the problem: 
  AxisymFvKProblem<AxisymFoepplvonKarmanElement<3> > problem(n_element);
