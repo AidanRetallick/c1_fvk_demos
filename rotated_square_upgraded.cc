@@ -1005,11 +1005,7 @@ int main(int argc, char **argv)
 
   // Create the problem, using FvK elements derived from TElement<2,4>
   // elements (with 4 nodes per element edge and 10 nodes overall).
-  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>>
-    problem;
-
-  // Make problem linear
-  problem.make_linear();
+  UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>> problem;
 
   // Set pressure
   Parameters::P_mag = 10.0;
@@ -1026,8 +1022,5 @@ int main(int argc, char **argv)
   problem.newton_solve();
   // Document the current solution
   problem.doc_solution();
-
-  // Test the rotated dofs
-
 
 } //End of main

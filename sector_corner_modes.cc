@@ -1138,6 +1138,14 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
 	    << comment << "\"\n";
   some_file.close();
 
+  npts=2;
+  sprintf(filename,"RESLT/soln_coarse%i.dat",Doc_info.number());
+  some_file.open(filename);
+  Bulk_mesh_pt->output(some_file,npts);
+  some_file << "TEXT X = 22, Y = 92, CS=FRAME T = \""
+	    << comment << "\"\n";
+  some_file.close();
+
   // Doc error and return of the square of the L2 error
   //---------------------------------------------------
   //double error,norm,dummy_error,zero_norm;
@@ -1160,17 +1168,16 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
 
   // Find the solution at r=0
   //   // ----------------------
-  MeshAsGeomObject* Mesh_as_geom_obj_pt=
-    new MeshAsGeomObject(Bulk_mesh_pt);
+  MeshAsGeomObject mesh_as_geom_obj(Bulk_mesh_pt);
   Vector<double> s(2);
   GeomObject* geom_obj_pt=0;
   Vector<double> r(2,0.0);
-  Mesh_as_geom_obj_pt->locate_zeta(r,geom_obj_pt,s);
+  mesh_as_geom_obj.locate_zeta(r,geom_obj_pt,s);
   // Compute the interpolated displacement vector
-  Vector<double> u_0(12,0.0);
-  u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_u_foeppl_von_karman(s);
+  Vector<double> u_0(3,0.0);
+  u_0=dynamic_cast<ELEMENT*>(geom_obj_pt)->interpolated_fvk_disp(s);
 
-  oomph_info << "w in the middle: " <<std::setprecision(15) << u_0[0] << std::endl;
+  oomph_info << "w in the middle: " << std::setprecision(15) << u_0[2] << std::endl;
 
   Trace_file << u_0[0] << '\n';
 
@@ -1189,8 +1196,6 @@ void UnstructuredFvKProblem<ELEMENT>::doc_solution(const
   // Increment the doc_info number
   Doc_info.number()++;
 
-  // Clean up
-  delete Mesh_as_geom_obj_pt;
 } // end of doc
 
 
@@ -1220,11 +1225,11 @@ int main(int argc, char **argv)
   CommandLineArgs::specify_command_line_flag("--eta", &Parameters::Eta);
 
   // Element Area (no larger element than)
-  double element_area=0.02;
+  double element_area=0.1;
   CommandLineArgs::specify_command_line_flag("--element_area", &element_area);
 
   // Selecet the boundary order
-  CommandLineArgs::specify_command_line_flag("--boundary_order", 
+  CommandLineArgs::specify_command_line_flag("--boundary_order",
                                              &Parameters::Boundary_order);
 
   // Parse command line

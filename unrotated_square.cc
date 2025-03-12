@@ -51,13 +51,13 @@ namespace Parameters
   double L = 1.0;
 
   /// The plate thickness
-  double Thickness = 0.01;
+  double Thickness = 0.001;
 
   /// Poisson ratio
   double Nu = 0.5;
 
   /// FvK parameter
-  double Eta = 12.0 * (1.0 - Nu * Nu) * Thickness * Thickness;
+  double Eta = 12.0 * (1.0 - Nu * Nu) / (Thickness * Thickness);
 
   /// Magnitude of pressure
   double P_mag = 0.0;
@@ -66,12 +66,12 @@ namespace Parameters
   double T_mag = 0.0;
 
   /// Element size
-  double Element_area = 0.1;
+  double Element_area = 0.02;
 
   /// Function call to update dependent parameters (Eta)
   void update_dependent_parameters()
   {
-    Eta = 12.0 * (1.0 - Nu * Nu) * Thickness * Thickness;
+    Eta = 12.0 * (1.0 - Nu * Nu) / (Thickness * Thickness);
   }
 
   /// Pressure depending on the position (x,y)
@@ -377,6 +377,7 @@ void UnstructuredFvKProblem<ELEMENT>::complete_problem_setup()
     // Assign the parameter pointers for the element
     el_pt->nu_pt() = &Parameters::Nu;
     el_pt->eta_pt() = &Parameters::Eta;
+
   }
 
   // Set the boundary conditions
@@ -560,10 +561,10 @@ void UnstructuredFvKProblem<ELEMENT>::apply_boundary_conditions()
   // Use pinned edge boundary conditions for the out-of-plane
   // displacements. Boundaries 0 and 2 are are constant y,
   // boundaries 1 and 3 are constant x:
-  pinned_w_dofs[0] = fully_clamped_yn_dof;
-  pinned_w_dofs[1] = fully_clamped_xn_dof;
-  pinned_w_dofs[2] = fully_clamped_yn_dof;
-  pinned_w_dofs[3] = fully_clamped_xn_dof;
+  pinned_w_dofs[0] = pinned_edge_yn_dof;
+  pinned_w_dofs[1] = pinned_edge_xn_dof;
+  pinned_w_dofs[2] = pinned_edge_yn_dof;
+  pinned_w_dofs[3] = pinned_edge_xn_dof;
 
 
   // Loop over all the boundaries in our bulk mesh
@@ -672,22 +673,16 @@ int main(int argc, char** argv)
   // elements (with 4 nodes per element edge and 10 nodes overall).
   UnstructuredFvKProblem<FoepplVonKarmanC1CurvableBellElement<4>> problem;
 
+  problem.max_residuals() = 1.0e3;
+  problem.max_newton_iterations() = 30;
+
   // Set pressure
-  Parameters::P_mag = 10.0;
+  Parameters::P_mag = 1.0e-5;
   // Set the Poisson ratio
   Parameters::Nu = 0.5;
 
-  // Make problem linear
-  problem.make_linear();
-
-  // Solve the system
-  problem.newton_solve();
-  // Document the current solution
+  // Document the initial state
   problem.doc_solution();
-
-  // Change the Poisson ratio
-  Parameters::Nu = 0.0;
-
   // Solve the system
   problem.newton_solve();
   // Document the current solution

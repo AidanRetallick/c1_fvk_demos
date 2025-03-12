@@ -7,6 +7,7 @@ noinst_PROGRAMS = unrotated_square \
                   rotated_square \
                   rotated_square_upgraded \
                   circular_disc \
+                  hexagon \
                   circular_sector \
                   sector_corner_modes \
                   square_corner_modes \
@@ -31,10 +32,12 @@ rotated_square_upgraded_SOURCES = \
  rotated_square_upgraded.cc
 circular_disc_SOURCES = \
  circular_disc.cc
+hexagon_SOURCES = \
+ hexagon.cc
 circular_sector_SOURCES = \
  circular_sector.cc
-corner_modes_SOURCES = \
- corner_modes.cc
+sector_corner_modes_SOURCES = \
+ sector_corner_modes.cc
 square_corner_modes_SOURCES = \
  square_corner_modes.cc
 triangular_plate_SOURCES = \
@@ -53,9 +56,11 @@ rotated_square_upgraded_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 circular_disc_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
+hexagon_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+ -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 circular_sector_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
-corner_modes_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
+sector_corner_modes_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
 square_corner_modes_LDADD = -L@libdir@ -lc1_foeppl_von_karman \
  -lgeneric $(EXTERNAL_LIBS) $(FLIBS)
